@@ -52,29 +52,26 @@ type (
 	RestoreRequest struct{ restore *velero.Restore }
 )
 
-func (r BackupRequest) Object() client.Object   { return r.backup }
-func (r RestoreRequest) Object() client.Object  { return r.restore }
-func (r BackupRequest) Name() string            { return r.backup.Name }
-func (r RestoreRequest) Name() string           { return r.restore.Name }
-func (r BackupRequest) StartTime() metav1.Time  { return *r.backup.Status.StartTimestamp }
-func (r RestoreRequest) StartTime() metav1.Time { return *r.restore.Status.StartTimestamp }
-func (r BackupRequest) EndTime() metav1.Time    { return *r.backup.Status.CompletionTimestamp }
-func (r RestoreRequest) EndTime() metav1.Time   { return *r.restore.Status.CompletionTimestamp }
+func (r BackupRequest) Object() client.Object         { return r.backup }
+func (r RestoreRequest) Object() client.Object        { return r.restore }
+func (r BackupRequest) Name() string                  { return r.backup.Name }
+func (r RestoreRequest) Name() string                 { return r.restore.Name }
+func (r BackupRequest) StartTime() metav1.Time        { return *r.backup.Status.StartTimestamp }
+func (r RestoreRequest) StartTime() metav1.Time       { return *r.restore.Status.StartTimestamp }
+func (r BackupRequest) EndTime() metav1.Time          { return *r.backup.Status.CompletionTimestamp }
+func (r RestoreRequest) EndTime() metav1.Time         { return *r.restore.Status.CompletionTimestamp }
+func (r BackupRequest) Status(log logr.Logger) error  { return backupRealStatusProcess(r.backup, log) }
+func (r RestoreRequest) Status(log logr.Logger) error { return restoreStatusProcess(r.restore, log) }
 
 type (
 	BackupRequests  struct{ backups *velero.BackupList }
 	RestoreRequests struct{ restores *velero.RestoreList }
 )
 
-func (r BackupRequests) Count() int  { return len(r.backups.Items) }
-func (r RestoreRequests) Count() int { return len(r.restores.Items) }
-func (r BackupRequests) Get(i int) kubeobjects.Request {
-	return BackupRequest{&r.backups.Items[i]}
-}
-
-func (r RestoreRequests) Get(i int) kubeobjects.Request {
-	return RestoreRequest{&r.restores.Items[i]}
-}
+func (r BackupRequests) Count() int                     { return len(r.backups.Items) }
+func (r RestoreRequests) Count() int                    { return len(r.restores.Items) }
+func (r BackupRequests) Get(i int) kubeobjects.Request  { return BackupRequest{&r.backups.Items[i]} }
+func (r RestoreRequests) Get(i int) kubeobjects.Request { return RestoreRequest{&r.restores.Items[i]} }
 
 type RequestsManager struct{}
 
@@ -219,9 +216,11 @@ func backupDummyCreateAndRestore(
 	restoreName string,
 	labels map[string]string,
 ) (*velero.Restore, error) {
+	namespacedName := types.NamespacedName{Namespace: requestNamespaceName, Name: backupName}
+
 	backupLocation, backup, err := backupCreate(
-		types.NamespacedName{Namespace: requestNamespaceName, Name: backupName},
-		w, reader, s3Url, s3BucketName, s3RegionName, s3KeyPrefix, secretKeyRef,
+		namespacedName,
+		w, s3Url, s3BucketName, s3RegionName, s3KeyPrefix, secretKeyRef,
 		backupSpecDummy(), sourceNamespaceName,
 		labels,
 	)
@@ -229,8 +228,12 @@ func backupDummyCreateAndRestore(
 		return nil, err
 	}
 
+	if err := reader.Get(w.ctx, namespacedName, backup); err != nil {
+		return nil, pkgerrors.Wrap(err, "backup dummy get")
+	}
+
 	return backupDummyStatusProcessAndRestore(
-		backupLocation, backup, w, reader,
+		backupLocation, backup, w,
 		sourceNamespaceName,
 		targetNamespaceName,
 		objectsSpec,
@@ -243,7 +246,6 @@ func backupDummyStatusProcessAndRestore(
 	backupLocation *velero.BackupStorageLocation,
 	backup *velero.Backup,
 	w objectWriter,
-	reader client.Reader,
 	sourceNamespaceName string,
 	targetNamespaceName string,
 	objectsSpec ramendrv1alpha1.KubeObjectsSpec,
@@ -258,7 +260,8 @@ func backupDummyStatusProcessAndRestore(
 	case velero.BackupPhasePartiallyFailed:
 		fallthrough
 	case velero.BackupPhaseFailed:
-		return backupRestore(backupLocation, backup, w, reader, sourceNamespaceName, targetNamespaceName,
+		return backupRestore(
+			backup, w, sourceNamespaceName, targetNamespaceName,
 			objectsSpec,
 			restoreName,
 			labels,
@@ -316,7 +319,7 @@ func KubeObjectsCaptureDelete(
 	namespacedName := types.NamespacedName{Namespace: requestNamespaceName, Name: captureName}
 
 	backupLocation, backup, err := backupCreate(
-		namespacedName, w, reader, s3Url, s3BucketName, s3RegionName, s3KeyPrefix, secretKeyRef,
+		namespacedName, w, s3Url, s3BucketName, s3RegionName, s3KeyPrefix, secretKeyRef,
 		backupSpecDummy(), sourceNamespaceName,
 		labels,
 	)
@@ -373,10 +376,8 @@ func backupDelete(
 }
 
 func backupRestore(
-	backupLocation *velero.BackupStorageLocation,
 	backup *velero.Backup,
 	w objectWriter,
-	reader client.Reader,
 	sourceNamespaceName string,
 	targetNamespaceName string,
 	objectsSpec ramendrv1alpha1.KubeObjectsSpec,
@@ -385,50 +386,35 @@ func backupRestore(
 ) (*velero.Restore, error) {
 	restore := restore(backup.Namespace, restoreName, objectsSpec, backup.Name,
 		sourceNamespaceName, targetNamespaceName, labels)
-	if err := objectCreateAndGet(w, reader, restore); err != nil {
+	if err := w.objectCreate(restore); err != nil {
 		return nil, err
 	}
 
-	return restoreStatusProcess(backupLocation, backup, restore, w)
+	return restore, nil
 }
 
 func restoreStatusProcess(
-	backupLocation *velero.BackupStorageLocation,
-	backup *velero.Backup,
 	restore *velero.Restore,
-	w objectWriter,
-) (*velero.Restore, error) {
-	restoreStatusLog(restore, w.log)
+	log logr.Logger,
+) error {
+	restoreStatusLog(restore, log)
 
 	switch restore.Status.Phase {
 	case velero.RestorePhaseCompleted:
-		return restore, nil
+		return nil
 	case velero.RestorePhaseNew:
 		fallthrough
 	case velero.RestorePhaseInProgress:
-		return nil, kubeobjects.RequestProcessingErrorCreate("restore" + string(restore.Status.Phase))
+		return kubeobjects.RequestProcessingErrorCreate("restore" + string(restore.Status.Phase))
 	case velero.RestorePhaseFailed:
 		fallthrough
 	case velero.RestorePhaseFailedValidation:
 		fallthrough
 	case velero.RestorePhasePartiallyFailed:
-		return nil, restoreRequestFailedDelete(backupLocation, backup, restore, w)
+		return errors.New("restore" + string(restore.Status.Phase))
 	default:
-		return nil, kubeobjects.RequestProcessingErrorCreate("restore.status.phase absent")
+		return kubeobjects.RequestProcessingErrorCreate("restore.status.phase absent")
 	}
-}
-
-func restoreRequestFailedDelete(
-	backupLocation *velero.BackupStorageLocation,
-	backup *velero.Backup,
-	restore *velero.Restore,
-	w objectWriter,
-) error {
-	if err := w.restoreObjectsDelete(backupLocation, backup, restore); err != nil {
-		return err
-	}
-
-	return errors.New("restore" + string(restore.Status.Phase) + "; request deleted")
 }
 
 func RestoreResultsGet(
@@ -461,7 +447,6 @@ func RestoreResultsGet(
 func (RequestsManager) ProtectRequestCreate(
 	ctx context.Context,
 	writer client.Writer,
-	reader client.Reader,
 	log logr.Logger,
 	s3Url string,
 	s3BucketName string,
@@ -486,9 +471,8 @@ func (RequestsManager) ProtectRequestCreate(
 		"label set", labels,
 	)
 
-	backup, err := backupRealCreate(
+	_, backup, err := backupRealCreate(
 		objectWriter{ctx: ctx, Writer: writer, log: log},
-		reader,
 		s3Url,
 		s3BucketName,
 		s3RegionName,
@@ -506,7 +490,6 @@ func (RequestsManager) ProtectRequestCreate(
 
 func backupRealCreate(
 	w objectWriter,
-	reader client.Reader,
 	s3Url string,
 	s3BucketName string,
 	s3RegionName string,
@@ -517,19 +500,14 @@ func backupRealCreate(
 	requestNamespaceName string,
 	captureName string,
 	labels map[string]string,
-) (*velero.Backup, error) {
-	backupLocation, backup, err := backupCreate(
+) (*velero.BackupStorageLocation, *velero.Backup, error) {
+	return backupCreate(
 		types.NamespacedName{Namespace: requestNamespaceName, Name: captureName},
-		w, reader, s3Url, s3BucketName, s3RegionName, s3KeyPrefix, secretKeyRef,
+		w, s3Url, s3BucketName, s3RegionName, s3KeyPrefix, secretKeyRef,
 		getBackupSpecFromObjectsSpec(objectsSpec),
 		sourceNamespaceName,
 		labels,
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	return backupRealStatusProcess(backupLocation, backup, w)
 }
 
 func getBackupSpecFromObjectsSpec(objectsSpec ramendrv1alpha1.KubeObjectsSpec) velero.BackupSpec {
@@ -547,15 +525,14 @@ func getBackupSpecFromObjectsSpec(objectsSpec ramendrv1alpha1.KubeObjectsSpec) v
 }
 
 func backupRealStatusProcess(
-	backupLocation *velero.BackupStorageLocation,
 	backup *velero.Backup,
-	w objectWriter,
-) (*velero.Backup, error) {
-	backupStatusLog(backup, w.log)
+	log logr.Logger,
+) error {
+	backupStatusLog(backup, log)
 
 	switch backup.Status.Phase {
 	case velero.BackupPhaseCompleted:
-		return backup, nil
+		return nil
 	case velero.BackupPhaseNew:
 		fallthrough
 	case velero.BackupPhaseInProgress:
@@ -565,16 +542,16 @@ func backupRealStatusProcess(
 	case velero.BackupPhaseUploadingPartialFailure:
 		fallthrough
 	case velero.BackupPhaseDeleting:
-		return nil, kubeobjects.RequestProcessingErrorCreate("backup" + string(backup.Status.Phase))
+		return kubeobjects.RequestProcessingErrorCreate("backup" + string(backup.Status.Phase))
 	case velero.BackupPhaseFailedValidation:
 		fallthrough
 	case velero.BackupPhasePartiallyFailed:
 		fallthrough
 	case velero.BackupPhaseFailed:
-		return nil, backupRequestFailedDelete(backupLocation, backup, w)
+		return errors.New("backup" + string(backup.Status.Phase))
 	}
 
-	return nil, kubeobjects.RequestProcessingErrorCreate("backup.status.phase absent")
+	return kubeobjects.RequestProcessingErrorCreate("backup.status.phase absent")
 }
 
 func backupRequestFailedDelete(
@@ -594,7 +571,10 @@ func (r BackupRequest) Deallocate(
 	writer client.Writer,
 	log logr.Logger,
 ) error {
-	return objectWriter{ctx: ctx, Writer: writer, log: log}.objectDelete(r.backup)
+	return objectWriter{ctx: ctx, Writer: writer, log: log}.backupObjectsDelete(
+		&velero.BackupStorageLocation{ObjectMeta: metav1.ObjectMeta{Namespace: r.backup.Namespace, Name: r.backup.Name}},
+		r.backup,
+	)
 }
 
 func (r RestoreRequest) Deallocate(
@@ -602,7 +582,13 @@ func (r RestoreRequest) Deallocate(
 	writer client.Writer,
 	log logr.Logger,
 ) error {
-	return objectWriter{ctx: ctx, Writer: writer, log: log}.objectDelete(r.restore)
+	backupObjectMeta := metav1.ObjectMeta{Namespace: r.restore.Namespace, Name: r.restore.Spec.BackupName}
+
+	return objectWriter{ctx: ctx, Writer: writer, log: log}.restoreObjectsDelete(
+		&velero.BackupStorageLocation{ObjectMeta: backupObjectMeta},
+		&velero.Backup{ObjectMeta: backupObjectMeta},
+		r.restore,
+	)
 }
 
 type objectWriter struct {
@@ -614,7 +600,6 @@ type objectWriter struct {
 func backupCreate(
 	backupNamespacedName types.NamespacedName,
 	w objectWriter,
-	reader client.Reader,
 	s3Url string,
 	s3BucketName string,
 	s3RegionName string,
@@ -637,7 +622,7 @@ func backupCreate(
 	backupSpec.SnapshotVolumes = new(bool)
 	backup := backup(backupNamespacedName, backupSpec, labels)
 
-	return backupLocation, backup, objectCreateAndGet(w, reader, backup)
+	return backupLocation, backup, w.objectCreate(backup)
 }
 
 func (w objectWriter) backupObjectsDelete(
