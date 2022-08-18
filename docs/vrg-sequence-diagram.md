@@ -1,0 +1,74 @@
+# VolumeReplicationGroup (VRG) Sequence Diagram
+
+The sequence below shows DR protection, failover and relocate of application.  This is a VRG focussed diagram and for simplicity (to reduce clutter), this diagram views the actions performed by ACM, DRPC or user as if they are performed by a single actor or entity.
+
+```mermaid
+sequenceDiagram
+autonumber
+participant C1App1 as App1 in Cluster1
+participant C1VRG1 as VRG1 in Cluster1
+Actor User as ACM/DRPC/User
+participant C2VRG1 as VRG1 in Cluster2
+participant C2App1 as App1 in Cluster2
+rect rgb(100,200,250)
+    loop for all required apps
+        note left of User: Deploy app in Cluster1 and DR protect it
+        User ->> C1App1 : Deploy app in ns1
+        activate C1VRG1
+        User -) C1VRG1:Create VRG1 with [spec.state = Primary] in ns1
+        C1VRG1 ->> C1VRG1: Protect App1
+        % C1VRG1 -) User:VRG1.spec.Cond.DataProtected = True
+        C1VRG1 -) User:VRG1.spec.Cond.ClusterDataProtected = True
+        % C1VRG1 -) User:App Protected [spec.status = Primary]
+        note left of User: App is DR protected
+    end
+end
+
+
+rect rgb(250,125,0)
+    note right of User: Failover DR protected apps to Cluster2
+    User ->> User: Fence Cluster1
+    loop for all required apps
+        activate C2VRG1
+        User -) C2VRG1:Create VRG1 with [spec.state = Primary] in ns1
+        % C2VRG1 -) User:VRG1.spec.Cond.DataReady = True
+        C2VRG1 ->> C2App1: Restore app
+        activate C2App1
+        C2VRG1 -) User:VRG1.spec.Cond.ClusterDataReady = True
+        note right of User: App is restored
+        C2VRG1 ->> C2VRG1: Protect App1
+        C2VRG1 -) User:VRG1.spec.Cond.ClusterDataProtected = True
+        note right of User: App is DR protected
+    end
+end
+
+rect rgb(200,100,100)
+    note left of User: Prepare to relocate apps to Cluster1
+    loop for all apps failed over to Cluster2
+        User ->> C1App1: Undeploy app
+        User -x C1VRG1: Delete VRG1
+    end
+    User ->> User: Unfence Cluster1
+
+end
+
+rect rgb(200,200,200)
+note left of User: Relocate DR protected apps to Cluster1
+    loop for all required apps
+        User ->> C2VRG1: Update VRG1 with [spec.state = Secondary] in ns1
+        User -x C2App1: Undeploy the app
+        C2VRG1 ->> User: VRG1.status.state = Secondary
+        User -x C2VRG1: Delete VRG1 with [spec.state = Secondary] in ns1
+        activate C1VRG1
+        User -) C1VRG1:Create VRG1 with [spec.state = Primary] in ns1
+        % C1VRG1 -) User:VRG1.spec.Cond.DataReady = True
+        C1VRG1 ->> C1App1: Restore app
+        activate C1App1
+        C1VRG1 -) User:VRG1.spec.Cond.ClusterDataReady = True
+        note left of User: App is restored
+        C1VRG1 ->> C1VRG1: Protect App1
+        C1VRG1 -) User:VRG1.spec.Cond.ClusterDataProtected = True
+        note left of User: App is DR protected
+    end
+end
+```
