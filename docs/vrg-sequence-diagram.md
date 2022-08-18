@@ -2,6 +2,8 @@
 
 The sequence below shows DR protection, failover and relocate of application.  This is a VRG focussed diagram and for simplicity (to reduce clutter), this diagram views the actions performed by ACM, DRPC or user as if they are performed by a single actor or entity.
 
+This version of the diagram only shows `ClusterData` related VRG conditions and does not show `Data` related VRG conditions.
+
 ```mermaid
 sequenceDiagram
 autonumber
@@ -27,7 +29,7 @@ end
 
 rect rgb(250,125,0)
     note right of User: Failover DR protected apps to Cluster2
-    User ->> User: Fence Cluster1
+    User ->> User: Fence Cluster1 (only for MetroDR)
     loop for all required apps
         activate C2VRG1
         User -) C2VRG1:Create VRG1 with [spec.state = Primary] in ns1
@@ -48,19 +50,21 @@ rect rgb(200,100,100)
         User ->> C1App1: Undeploy app
         User -x C1VRG1: Delete VRG1
     end
-    User ->> User: Unfence Cluster1
+    User ->> User: Unfence Cluster1 (only for MetroDR)
 
 end
 
-rect rgb(200,200,200)
+rect rgb(200,200,100)
 note left of User: Relocate DR protected apps to Cluster1
     loop for all required apps
         User ->> C2VRG1: Update VRG1 with [spec.state = Secondary] in ns1
         User -x C2App1: Undeploy the app
         C2VRG1 ->> User: VRG1.status.state = Secondary
+        note left of User: Regional DR resync requirement
+        User ->> C1VRG1: Create VRG1 with [spec.state = Secondary] in ns1 to start a resync
         User -x C2VRG1: Delete VRG1 with [spec.state = Secondary] in ns1
         activate C1VRG1
-        User -) C1VRG1:Create VRG1 with [spec.state = Primary] in ns1
+        User -) C1VRG1:Update VRG1 with [spec.state = Primary] in ns1
         % C1VRG1 -) User:VRG1.spec.Cond.DataReady = True
         C1VRG1 ->> C1App1: Restore app
         activate C1App1
