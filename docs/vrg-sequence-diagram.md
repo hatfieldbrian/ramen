@@ -19,8 +19,8 @@ participant C2App1 as App1 in Cluster2
         activate C1VRG1
         User -) C1VRG1:Create VRG1 with [spec.state = Primary] in ns1
         C1VRG1 ->> C1VRG1: Protect App1
-        % C1VRG1 -) User:VRG1.spec.Cond.DataProtected = True
-        C1VRG1 -) User:VRG1.spec.Cond.ClusterDataProtected = True
+        % C1VRG1 -) User:VRG1.status.Cond.DataProtected = True
+        C1VRG1 -) User:VRG1.status.Cond.ClusterDataProtected = True
         % C1VRG1 -) User:App Protected [spec.status = Primary]
         note left of User: App is DR protected
     end
@@ -33,13 +33,13 @@ participant C2App1 as App1 in Cluster2
     loop for all required apps
         activate C2VRG1
         User -) C2VRG1:Create VRG1 with [spec.state = Primary] in ns1
-        % C2VRG1 -) User:VRG1.spec.Cond.DataReady = True
+        % C2VRG1 -) User:VRG1.status.Cond.DataReady = True
         C2VRG1 ->> C2App1: Restore app
         activate C2App1
-        C2VRG1 -) User:VRG1.spec.Cond.ClusterDataReady = True
+        C2VRG1 -) User:VRG1.status.Cond.ClusterDataReady = True
         note right of User: App is restored
         C2VRG1 ->> C2VRG1: Protect App1
-        C2VRG1 -) User:VRG1.spec.Cond.ClusterDataProtected = True
+        C2VRG1 -) User:VRG1.status.Cond.ClusterDataProtected = True
         note right of User: App is DR protected
     end
 % end
@@ -65,13 +65,13 @@ participant C2App1 as App1 in Cluster2
         User -x C2VRG1: Delete VRG1 with [spec.state = Secondary] in ns1
         activate C1VRG1
         User -) C1VRG1:Update VRG1 with [spec.state = Primary] in ns1
-        % C1VRG1 -) User:VRG1.spec.Cond.DataReady = True
+        % C1VRG1 -) User:VRG1.status.Cond.DataReady = True
         C1VRG1 ->> C1App1: Restore app
         activate C1App1
-        C1VRG1 -) User:VRG1.spec.Cond.ClusterDataReady = True
+        C1VRG1 -) User:VRG1.status.Cond.ClusterDataReady = True
         note left of User: App is restored
         C1VRG1 ->> C1VRG1: Protect App1
-        C1VRG1 -) User:VRG1.spec.Cond.ClusterDataProtected = True
+        C1VRG1 -) User:VRG1.status.Cond.ClusterDataProtected = True
         note left of User: App is DR protected
     end
 % end
