@@ -12,7 +12,7 @@ participant C1VRG1 as VRG1 in Cluster1
 Actor User as ACM/DRPC/User
 participant C2VRG1 as VRG1 in Cluster2
 participant C2App1 as App1 in Cluster2
-rect rgb(100,200,250)
+% rect rgb(100,200,250)
     loop for all required apps
         note left of User: Deploy app in Cluster1 and DR protect it
         User ->> C1App1 : Deploy app in ns1
@@ -24,10 +24,10 @@ rect rgb(100,200,250)
         % C1VRG1 -) User:App Protected [spec.status = Primary]
         note left of User: App is DR protected
     end
-end
+% end
 
 
-rect rgb(250,125,0)
+% rect rgb(250,125,0)
     note right of User: Failover DR protected apps to Cluster2
     User ->> User: Fence Cluster1 (only for MetroDR)
     loop for all required apps
@@ -42,9 +42,9 @@ rect rgb(250,125,0)
         C2VRG1 -) User:VRG1.spec.Cond.ClusterDataProtected = True
         note right of User: App is DR protected
     end
-end
+% end
 
-rect rgb(200,100,100)
+% rect
     note left of User: Prepare to relocate apps to Cluster1
     loop for all apps failed over to Cluster2
         User ->> C1App1: Undeploy app
@@ -52,10 +52,10 @@ rect rgb(200,100,100)
     end
     User ->> User: Unfence Cluster1 (only for MetroDR)
 
-end
+% end
 
-rect rgb(200,200,100)
-note left of User: Relocate DR protected apps to Cluster1
+% rect rgb(200,200,100)
+    note left of User: Relocate DR protected apps to Cluster1
     loop for all required apps
         User ->> C2VRG1: Update VRG1 with [spec.state = Secondary] in ns1
         User -x C2App1: Undeploy the app
@@ -74,5 +74,5 @@ note left of User: Relocate DR protected apps to Cluster1
         C1VRG1 -) User:VRG1.spec.Cond.ClusterDataProtected = True
         note left of User: App is DR protected
     end
-end
+% end
 ```
