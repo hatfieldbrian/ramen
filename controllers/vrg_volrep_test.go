@@ -172,7 +172,7 @@ var _ = Describe("VolumeReplicationGroupVolRepController", func() {
 			vrgS3StoreGetTestCase = newVRGTestCaseCreateAndStart(2, createTestTemplate, true, false)
 		})
 		It("waits for VRG status to match", func() {
-			vrgS3StoreGetTestCase.verifyVRGStatusCondition(vrgController.VRGConditionTypeClusterDataReady, false)
+			vrgS3StoreGetTestCase.verifyVRGStatusConditionFalse(vrgController.VRGConditionTypeClusterDataReady)
 		})
 		It("cleans up after testing", func() {
 			vrgS3StoreGetTestCase.cleanup()
@@ -1067,42 +1067,43 @@ func (v *vrgTest) verifyVRGStatusExpectation(expectedStatus bool) {
 		"while waiting for VRG TRUE condition %s/%s", v.vrgName, v.namespace)
 }
 
-func (v *vrgTest) verifyVRGStatusCondition(conditionName string, expectedStatus bool) {
-	testFunc := func() bool {
-		vrg := v.getVRG(v.vrgName)
-		vrgCondition := checkConditions(
-			vrg.Status.Conditions,
-			conditionName)
+func (v *vrgTest) conditionGet(conditionName string) *metav1.Condition {
+	return meta.FindStatusCondition(v.getVRG(v.vrgName).Status.Conditions, conditionName)
+}
 
-		switch expectedStatus {
-		case true:
-			if vrgCondition == nil {
-				return false
-			}
-
-			return vrgCondition.Status == metav1.ConditionTrue
-		default: // false
-			if vrgCondition == nil {
-				return true
-			}
-
-			return vrgCondition.Status == metav1.ConditionFalse
+func (v *vrgTest) VerifyVRGStatusConditionTrue(conditionName string) {
+	Eventually(func() metav1.ConditionStatus {
+		vrgCondition := v.conditionGet(conditionName)
+		if vrgCondition == nil {
+			return metav1.ConditionUnknown
 		}
-	}
 
-	switch expectedStatus {
-	case true:
-		Eventually(testFunc, vrgtimeout, vrginterval).Should(BeTrue(),
-			"while waiting for VRG %s TRUE condition %s/%s", conditionName, v.vrgName, v.namespace)
-	default: // false
-		Consistently(testFunc, vrgtimeout, vrginterval).Should(BeTrue(),
-			"while waiting for VRG %s FALSE condition %s/%s", conditionName, v.vrgName, v.namespace)
-	}
+		return vrgCondition.Status
+	}, vrgtimeout, vrginterval).Should(Equal(metav1.ConditionTrue),
+		"while waiting for TRUE", "condition", conditionName, "VRG", v.vrgName, "namespace", v.namespace)
+}
+
+func (v *vrgTest) verifyVRGStatusConditionFalse(conditionName string) {
+	var condition *metav1.Condition
+
+	Eventually(func() *metav1.Condition {
+		condition = v.conditionGet(conditionName)
+
+		return condition
+	}, vrgtimeout, vrginterval).ShouldNot(BeNil(),
+		"while waiting for non-nil", "condition", conditionName, "VRG", v.vrgName, "namespace", v.namespace)
+	Consistently(func(g Gomega) {
+		vrgCondition := v.conditionGet(conditionName)
+		Expect(vrgCondition).ToNot(BeNil())
+		g.Expect(vrgCondition.Status).To(Equal(metav1.ConditionFalse))
+		g.Expect(vrgCondition.LastTransitionTime.Time).To(BeTemporally("==", condition.LastTransitionTime.Time))
+	}).Should(Succeed(),
+		"while waiting for FALSE", "condition", conditionName, "VRG", v.vrgName, "namespace", v.namespace)
 }
 
 func (v *vrgTest) verifyCachedUploadError() {
 	// Verify cluster data protected remains false
-	v.verifyVRGStatusCondition(vrgController.VRGConditionTypeClusterDataProtected, false)
+	v.verifyVRGStatusConditionFalse(vrgController.VRGConditionTypeClusterDataProtected)
 
 	// We verify is exactly one PVC got the expected aws error and rest report the cached error
 	cachedErr := 0
