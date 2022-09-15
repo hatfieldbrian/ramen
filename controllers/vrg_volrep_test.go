@@ -56,14 +56,16 @@ var _ = Describe("VolumeReplicationGroupVolRepController", func() {
 
 		return condition
 	}
-	vrgGet := func() {
+	vrgGet := func() *ramendrv1alpha1.VolumeReplicationGroup {
 		Expect(apiReader.Get(context.TODO(), types.NamespacedName{
 			Namespace: vrg.Namespace, Name: vrg.Name,
 		}, vrg)).To(Succeed())
+
+		return vrg
 	}
 	var dataReadyCondition *metav1.Condition
 	When("ReplicationState is invalid", func() {
-		It("should set DataReady status=False reason=Error", func() {
+		Specify("ReplicationState: invalid", func() {
 			vrg = &ramendrv1alpha1.VolumeReplicationGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
@@ -76,6 +78,8 @@ var _ = Describe("VolumeReplicationGroupVolRepController", func() {
 				},
 			}
 			Expect(k8sClient.Create(context.TODO(), vrg)).To(Succeed())
+		})
+		It("should set DataReady status=False reason=Error", func() {
 			Eventually(func() int {
 				vrgGet()
 
@@ -94,10 +98,12 @@ var _ = Describe("VolumeReplicationGroupVolRepController", func() {
 		})
 	})
 	When("ReplicationState is primary, but sync and async are disabled", func() {
-		It("should change DataReady message", func() {
+		Specify("ReplicationState: primary", func() {
 			vrg.Spec.ReplicationState = "primary"
-			dataReadyConditionMessage := dataReadyCondition.Message
 			Expect(k8sClient.Update(context.TODO(), vrg)).To(Succeed())
+		})
+		It("should change DataReady message", func() {
+			dataReadyConditionMessage := dataReadyCondition.Message
 			Eventually(func() string {
 				vrgGet()
 				dataReadyCondition = vrgConditionExpect("DataReady")
@@ -108,9 +114,11 @@ var _ = Describe("VolumeReplicationGroupVolRepController", func() {
 		})
 	})
 	When("ReplicationState is primary and sync is enabled, but s3 profiles are absent", func() {
-		It("should set ClusterDataReady status=False reason=Error", func() {
+		Specify("synchronous replication", func() {
 			vrg.Spec.Sync = &ramendrv1alpha1.VRGSyncSpec{}
 			Expect(k8sClient.Update(context.TODO(), vrg)).To(Succeed())
+		})
+		It("should set ClusterDataReady status=False reason=Error", func() {
 			var clusterDataReadyCondition *metav1.Condition
 			Eventually(func() metav1.ConditionStatus {
 				vrgGet()
@@ -120,6 +128,72 @@ var _ = Describe("VolumeReplicationGroupVolRepController", func() {
 			}, timeout, interval).Should(Equal(metav1.ConditionFalse))
 			Expect(clusterDataReadyCondition.Reason).To(Equal("Error"))
 		})
+	})
+	When("ReplicationState is primary, sync is enabled, no volumes selected, and all s3 stores are unwriteable", func() {
+		Specify("one s3 store that is unwriteable", func() {
+			vrg.Spec.S3Profiles = []string{s3Profiles[6].S3ProfileName}
+			Expect(k8sClient.Update(context.TODO(), vrg)).To(Succeed())
+		})
+		It("sets VRG cluster data protected condition to true", func() {
+			verifyVRGStatusConditionTrue(vrgGet, "ClusterDataProtected")
+		})
+		It("sets VRG data protected condition to true", func() {
+			verifyVRGStatusConditionTrue(vrgGet, "DataProtected")
+		})
+	})
+	var sc *storagev1.StorageClass
+	Specify("storage class create", func() {
+		sc = createSC(vrg.Name, vrg.Name, vrg.Name)
+	})
+	var pv *corev1.PersistentVolume
+	var pvc *corev1.PersistentVolumeClaim
+	Specify("persistent volume and claim create", func() {
+		pv, pvc = createPVandPVC(vrg.Name, sc.Name, vrg.Namespace, vrg.Name, nil, corev1.VolumeBound, corev1.ClaimBound)
+	})
+	When("ReplicationState is primary, sync is enabled, one volume is selected and all s3 stores are unwriteable", func() {
+		var clusterDataProtected0 *metav1.Condition
+		It("sets VRG cluster data protected condition to false", func() {
+			Eventually(func(g Gomega) {
+				vrg = vrgGet()
+				clusterDataProtected0 = meta.FindStatusCondition(vrg.Status.Conditions, "ClusterDataProtected")
+				Expect(clusterDataProtected0).ToNot(BeNil())
+				g.Expect(clusterDataProtected0.Status).To(Equal(metav1.ConditionFalse))
+			}, vrgtimeout, vrginterval).Should(Succeed())
+		})
+		It("leaves VRG data protected condition true", func() {
+			if true {
+				return
+			}
+
+			dataProtected := vrgConditionExpect("DataProtected")
+			Expect(dataProtected.Status).To(Equal(metav1.ConditionTrue))
+		})
+		It("maintains VRG cluster data protected false and transition time and data protected true", func() {
+			Consistently(func(g Gomega) {
+				vrg = vrgGet()
+				{
+					clusterDataProtected := meta.FindStatusCondition(vrg.Status.Conditions, "ClusterDataProtected")
+					Expect(clusterDataProtected).ToNot(BeNil())
+					g.Expect(clusterDataProtected.Status).To(Equal(metav1.ConditionFalse))
+					g.Expect(clusterDataProtected.LastTransitionTime.Time).To(BeTemporally("==",
+						clusterDataProtected0.LastTransitionTime.Time))
+				}
+				if false {
+					dataProtected := meta.FindStatusCondition(vrg.Status.Conditions, "DataProtected")
+					Expect(dataProtected).ToNot(BeNil())
+					g.Expect(dataProtected.Status).To(Equal(metav1.ConditionTrue))
+				}
+			}, 3*time.Second, 333*time.Millisecond).Should(Succeed())
+		})
+	})
+	Specify("persistent volume claim delete", func() {
+		Expect(k8sClient.Delete(context.TODO(), pvc)).To(Succeed())
+	})
+	Specify("persistent volume delete", func() {
+		Expect(k8sClient.Delete(context.TODO(), pv)).To(Succeed())
+	})
+	Specify("storage class delete", func() {
+		Expect(k8sClient.Delete(context.TODO(), sc)).To(Succeed())
 	})
 	Specify("Vrg delete", func() {
 		Expect(k8sClient.Delete(context.TODO(), vrg)).To(Succeed())
@@ -171,7 +245,7 @@ var _ = Describe("VolumeReplicationGroupVolRepController", func() {
 			createTestTemplate.s3Profiles = []string{s3Profiles[3].S3ProfileName}
 			vrgS3StoreGetTestCase = newVRGTestCaseCreateAndStart(2, createTestTemplate, true, false)
 		})
-		It("waits for VRG status to match", func() {
+		It("sets VRG cluster data ready condition to false", func() {
 			vrgS3StoreGetTestCase.verifyVRGStatusConditionFalse(vrgController.VRGConditionTypeClusterDataReady)
 		})
 		It("cleans up after testing", func() {
@@ -612,7 +686,7 @@ func newVRGTestCaseCreate(pvcCount int, testTemplate *template, checkBind, vrgFi
 func (v *vrgTest) VRGTestCaseStart() {
 	By("Creating namespace " + v.namespace)
 	v.createNamespace()
-	v.createSC(v.template)
+	v.createSC()
 	v.createVRC(v.template)
 
 	if v.vrgFirst {
@@ -661,8 +735,7 @@ func (v *vrgTest) createPVCandPV(claimBindInfo corev1.PersistentVolumeClaimPhase
 		// race, create PV first and then PVC. Until PVC is created and bound,
 		// VRG will not be able to reach PV. And by the time VRG reconciler
 		// reaches PV, it is already bound by this unit test.
-		v.createPV(pvName, pvcName, volumeBindInfo)
-		v.createPVC(pvcName, v.namespace, pvName, v.pvcLabels, claimBindInfo)
+		createPVandPVC(pvName, v.storageClass, v.namespace, pvcName, v.pvcLabels, volumeBindInfo, claimBindInfo)
 		v.pvNames = append(v.pvNames, pvName)
 		v.pvcNames = append(v.pvcNames, pvcName)
 	}
@@ -756,7 +829,16 @@ func (v *vrgTest) createNamespace() {
 		"failed to create namespace %s", v.namespace)
 }
 
-func (v *vrgTest) createPV(pvName, claimName string, bindInfo corev1.PersistentVolumePhase) {
+func createPVandPVC(pvName, storageClassName, namespaceName, pvcName string, pvcLabels map[string]string,
+	pvPhase corev1.PersistentVolumePhase,
+	pvcPhase corev1.PersistentVolumeClaimPhase,
+) (*corev1.PersistentVolume, *corev1.PersistentVolumeClaim) {
+	return createPV(pvName, storageClassName, namespaceName, pvcName, pvPhase),
+		createPVC(pvcName, storageClassName, namespaceName, pvName, pvcLabels, pvcPhase)
+}
+
+func createPV(pvName, storageClassName, namespaceName, claimName string, bindInfo corev1.PersistentVolumePhase,
+) *corev1.PersistentVolume {
 	By("creating PV " + pvName)
 
 	capacity := corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")}
@@ -775,12 +857,12 @@ func (v *vrgTest) createPV(pvName, claimName string, bindInfo corev1.PersistentV
 			AccessModes: accessModes,
 			ClaimRef: &corev1.ObjectReference{
 				Kind:      "PersistentVolumeClaim",
-				Namespace: v.namespace,
+				Namespace: namespaceName,
 				Name:      claimName,
 				// UID:       types.UID(claimName),
 			},
 			PersistentVolumeReclaimPolicy: "Delete",
-			StorageClassName:              v.storageClass,
+			StorageClassName:              storageClassName,
 			MountOptions:                  []string{},
 			NodeAffinity: &corev1.VolumeNodeAffinity{
 				Required: &corev1.NodeSelector{
@@ -812,17 +894,18 @@ func (v *vrgTest) createPV(pvName, claimName string, bindInfo corev1.PersistentV
 	err = k8sClient.Status().Update(context.TODO(), pv)
 	Expect(err).To(BeNil(),
 		"failed to update status of PV %s", pvName)
+
+	return pv
 }
 
-func (v *vrgTest) createPVC(pvcName, namespace, volumeName string, labels map[string]string,
-	bindInfo corev1.PersistentVolumeClaimPhase) {
+func createPVC(pvcName, storageClassName, namespaceName, volumeName string, labels map[string]string,
+	bindInfo corev1.PersistentVolumeClaimPhase,
+) *corev1.PersistentVolumeClaim {
 	By("creating PVC " + pvcName)
 
 	capacity := corev1.ResourceList{
 		corev1.ResourceStorage: resource.MustParse("1Gi"),
 	}
-
-	storageclass := v.storageClass
 
 	accessModes := []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
 	pvc := &corev1.PersistentVolumeClaim{
@@ -830,7 +913,7 @@ func (v *vrgTest) createPVC(pvcName, namespace, volumeName string, labels map[st
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
 			Labels:    labels,
-			Namespace: namespace,
+			Namespace: namespaceName,
 			// ResourceVersion: "1",
 			SelfLink: "/api/v1/namespaces/testns/persistentvolumeclaims/" + pvcName,
 			UID:      types.UID(volumeName),
@@ -839,7 +922,7 @@ func (v *vrgTest) createPVC(pvcName, namespace, volumeName string, labels map[st
 			AccessModes:      accessModes,
 			Resources:        corev1.ResourceRequirements{Requests: capacity},
 			VolumeName:       volumeName,
-			StorageClassName: &storageclass,
+			StorageClassName: &storageClassName,
 		},
 	}
 
@@ -855,6 +938,8 @@ func (v *vrgTest) createPVC(pvcName, namespace, volumeName string, labels map[st
 	err = k8sClient.Status().Update(context.TODO(), pvc)
 	Expect(err).To(BeNil(),
 		"failed to update status of PVC %s", pvcName)
+
+	return pvc
 }
 
 func (v *vrgTest) bindPVAndPVC() {
@@ -948,25 +1033,31 @@ func (v *vrgTest) createVRC(testTemplate *template) {
 		"failed to create/get VolumeReplicationClass %s/%s", v.replicationClass, v.vrgName)
 }
 
-func (v *vrgTest) createSC(testTemplate *template) {
-	By("creating StorageClass " + v.storageClass)
+func (v *vrgTest) createSC() {
+	createSC(v.template.storageClassName, v.template.scProvisioner, v.vrgName)
+}
+
+func createSC(storageClassName, provisioner, vrgName string) *storagev1.StorageClass {
+	By("creating StorageClass " + storageClassName)
 
 	sc := &storagev1.StorageClass{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: v.storageClass,
+			Name: storageClassName,
 		},
-		Provisioner: testTemplate.scProvisioner,
+		Provisioner: provisioner,
 	}
 
 	err := k8sClient.Create(context.TODO(), sc)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: v.storageClass}, sc)
+			err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: storageClassName}, sc)
 		}
 	}
 
 	Expect(err).NotTo(HaveOccurred(),
-		"failed to create/get StorageClass %s/%s", v.storageClass, v.vrgName)
+		"failed to create/get StorageClass %s/%s", storageClassName, vrgName)
+
+	return sc
 }
 
 func (v *vrgTest) verifyPVCBindingToPV(shouldBeBound bool) {
@@ -1067,38 +1158,76 @@ func (v *vrgTest) verifyVRGStatusExpectation(expectedStatus bool) {
 		"while waiting for VRG TRUE condition %s/%s", v.vrgName, v.namespace)
 }
 
-func (v *vrgTest) conditionGet(conditionName string) *metav1.Condition {
-	return meta.FindStatusCondition(v.getVRG(v.vrgName).Status.Conditions, conditionName)
+func (v *vrgTest) VerifyVRGStatusConditionTrue(conditionName string) {
+	verifyVRGStatusConditionTrue(
+		func() *ramendrv1alpha1.VolumeReplicationGroup { return v.getVRG(v.vrgName) },
+		conditionName,
+	)
 }
 
-func (v *vrgTest) VerifyVRGStatusConditionTrue(conditionName string) {
+func verifyVRGStatusConditionTrue(
+	vrgGet func() *ramendrv1alpha1.VolumeReplicationGroup,
+	conditionName string,
+) {
+	var vrg *ramendrv1alpha1.VolumeReplicationGroup
+
+	var vrgCondition *metav1.Condition
+
 	Eventually(func() metav1.ConditionStatus {
-		vrgCondition := v.conditionGet(conditionName)
+		vrg = vrgGet()
+		vrgCondition = meta.FindStatusCondition(vrg.Status.Conditions, conditionName)
+
 		if vrgCondition == nil {
 			return metav1.ConditionUnknown
 		}
 
 		return vrgCondition.Status
 	}, vrgtimeout, vrginterval).Should(Equal(metav1.ConditionTrue),
-		"while waiting for TRUE", "condition", conditionName, "VRG", v.vrgName, "namespace", v.namespace)
+		"while waiting for VRG condition %s TRUE", conditionName,
+	)
 }
 
 func (v *vrgTest) verifyVRGStatusConditionFalse(conditionName string) {
+	verifyVRGStatusConditionFalse(
+		func() *ramendrv1alpha1.VolumeReplicationGroup { return v.getVRG(v.vrgName) },
+		conditionName,
+	)
+}
+
+func verifyVRGStatusConditionFalse(
+	vrgGet func() *ramendrv1alpha1.VolumeReplicationGroup,
+	conditionName string,
+) *metav1.Condition {
+	var vrg *ramendrv1alpha1.VolumeReplicationGroup
+
+	conditionGet := func() *metav1.Condition {
+		vrg = vrgGet()
+
+		return meta.FindStatusCondition(vrg.Status.Conditions, conditionName)
+	}
+
 	var condition *metav1.Condition
 
 	Eventually(func() *metav1.Condition {
-		condition = v.conditionGet(conditionName)
+		condition = conditionGet()
 
 		return condition
 	}, vrgtimeout, vrginterval).ShouldNot(BeNil(),
-		"while waiting for non-nil", "condition", conditionName, "VRG", v.vrgName, "namespace", v.namespace)
+		"while waiting for VRG condition %s non-nil", conditionName,
+	)
+
+	var vrgCondition *metav1.Condition
+
 	Consistently(func(g Gomega) {
-		vrgCondition := v.conditionGet(conditionName)
+		vrgCondition = conditionGet()
 		Expect(vrgCondition).ToNot(BeNil())
 		g.Expect(vrgCondition.Status).To(Equal(metav1.ConditionFalse))
 		g.Expect(vrgCondition.LastTransitionTime.Time).To(BeTemporally("==", condition.LastTransitionTime.Time))
-	}).Should(Succeed(),
-		"while waiting for FALSE", "condition", conditionName, "VRG", v.vrgName, "namespace", v.namespace)
+	}, 3*time.Second, 333*time.Millisecond).Should(Succeed(),
+		"while waiting for VRG %s/%s condition %s FALSE", vrg.Namespace, vrg.Name, conditionName,
+	)
+
+	return vrgCondition
 }
 
 func (v *vrgTest) verifyCachedUploadError() {

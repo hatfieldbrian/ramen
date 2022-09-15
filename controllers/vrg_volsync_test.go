@@ -17,7 +17,6 @@ import (
 	snapv1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1"
 	ramendrv1alpha1 "github.com/ramendr/ramen/api/v1alpha1"
 	"github.com/ramendr/ramen/controllers/volsync"
-	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 )
 
@@ -52,6 +51,10 @@ var _ = Describe("VolumeReplicationGroupVolSyncController", func() {
 
 		cancel()
 	})
+
+	createSC := func(vrg *ramendrv1alpha1.VolumeReplicationGroup) {
+		createSC(testStorageClassName, "manual.storage.com", vrg.GetName())
+	}
 
 	Describe("Primary initial setup", func() {
 		testMatchLabels := map[string]string{
@@ -93,7 +96,7 @@ var _ = Describe("VolumeReplicationGroupVolSyncController", func() {
 					ContainElement("volumereplicationgroups.ramendr.openshift.io/vrg-protection"))
 
 				createSecret(testVsrg.GetName(), testNamespace.Name)
-				createSC()
+				createSC(testVsrg)
 				createVSC()
 			})
 
@@ -226,7 +229,7 @@ var _ = Describe("VolumeReplicationGroupVolSyncController", func() {
 					ContainElement("volumereplicationgroups.ramendr.openshift.io/vrg-protection"))
 
 				createSecret(testVrg.GetName(), testNamespace.Name)
-				createSC()
+				createSC(testVrg)
 				createVSC()
 			})
 
@@ -423,25 +426,6 @@ func createSecret(vrgName, namespace string) {
 	}
 	Expect(k8sClient.Create(context.TODO(), secret)).To(Succeed())
 	Expect(secret.GetName()).NotTo(BeEmpty())
-}
-
-func createSC() {
-	sc := &storagev1.StorageClass{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: testStorageClassName,
-		},
-		Provisioner: "manual.storage.com",
-	}
-
-	err := k8sClient.Create(context.TODO(), sc)
-	if err != nil {
-		if errors.IsAlreadyExists(err) {
-			err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: sc.Name}, sc)
-		}
-	}
-
-	Expect(err).NotTo(HaveOccurred(),
-		"failed to create/get StorageClass %s", sc.Name)
 }
 
 func createVSC() {
