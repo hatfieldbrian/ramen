@@ -30,17 +30,6 @@ const (
 	AnnotationSchemeGroup = "apps.open-cluster-management.io"
 )
 
-func (v *VRGInstance) updateFinalSyncStatus() {
-	// We don't need the final sync preparation for VolRep. Just mark it complete
-	if v.instance.Spec.PrepareForFinalSync && len(v.volSyncPVCs) == 0 {
-		v.instance.Status.PrepareForFinalSyncComplete = true
-	}
-	// We don't need to run the final sync for VolRep. Just mark it complete
-	if v.instance.Spec.RunFinalSync && len(v.volSyncPVCs) == 0 {
-		v.instance.Status.FinalSyncComplete = true
-	}
-}
-
 // reconcileVolRepsAsPrimary creates/updates VolumeReplication CR for each pvc
 // from pvcList. If it fails (even for one pvc), then requeue is set to true.
 func (v *VRGInstance) reconcileVolRepsAsPrimary(requeue *bool) {
@@ -90,8 +79,6 @@ func (v *VRGInstance) reconcileVolRepsAsPrimary(requeue *bool) {
 
 		log.Info("Successfully processed VolumeReplication for PersistentVolumeClaim")
 	}
-
-	v.updateFinalSyncStatus()
 }
 
 // reconcileVolRepsAsSecondary reconciles VolumeReplication resources for the VRG as secondary

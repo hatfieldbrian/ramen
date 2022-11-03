@@ -593,6 +593,9 @@ spec:
                                 number:
                                   format: int64
                                   type: integer
+                                startGeneration:
+                                  format: int64
+                                  type: integer
                                 startTime:
                                   format: date-time
                                   nullable: true
