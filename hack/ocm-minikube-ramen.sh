@@ -536,6 +536,7 @@ ramen_deploy_hub()
 exit_stack_push unset -f ramen_deploy_hub
 ramen_deploy_spoke()
 {
+	volsync_crds_deploy $1
 	ramen_deploy_hub_or_spoke $1 dr-cluster
 }
 exit_stack_push unset -f ramen_deploy_spoke
@@ -557,6 +558,7 @@ exit_stack_push unset -f ramen_undeploy_hub
 ramen_undeploy_spoke()
 {
 	ramen_undeploy_hub_or_spoke $1 dr-cluster
+	volsync_crds_undeploy $1
 }
 exit_stack_push unset -f ramen_undeploy_spoke
 ramen_deploy_spokes()
@@ -579,6 +581,18 @@ olm_undeploy_spokes()
 	for cluster_name in $spoke_cluster_names; do olm_undeploy $cluster_name; done; unset -v cluster_name
 }
 exit_stack_push unset -f olm_undeploy_spokes
+volsync_crds_deploy() {
+	volsync_crds_kubectl $1 apply
+}; exit_stack_push unset -f volsync_crds_deploy
+volsync_crds_undeploy() {
+	volsync_crds_kubectl $1 delete\ --ignore-not-found
+}; exit_stack_push unset -f volsync_crds_undeploy
+volsync_crds_kubectl() {
+	kubectl --context $1 $2\
+		-f hack/test/volsync.backube_replicationdestinations.yaml\
+		-f hack/test/volsync.backube_replicationsources.yaml\
+
+}; exit_stack_push unset -f volsync_crds_kubectl
 ocm_ramen_samples_git_ref=${ocm_ramen_samples_git_ref-main}
 ocm_ramen_samples_git_path=${ocm_ramen_samples_git_path-ramendr}
 exit_stack_push unset -v ocm_ramen_samples_git_ref
