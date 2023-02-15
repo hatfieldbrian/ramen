@@ -92,6 +92,7 @@ func (r *VolumeReplicationGroupReconciler) SetupWithManager(
 		Owns(&volrep.VolumeReplication{})
 
 	if !ramenConfig.VolSync.Disabled {
+		r.Log.Info("VolSync enabled; own volsync resources")
 		builder.Owns(&volsyncv1alpha1.ReplicationDestination{}).
 			Owns(&volsyncv1alpha1.ReplicationSource{})
 	} else {
