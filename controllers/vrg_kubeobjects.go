@@ -75,7 +75,8 @@ func (v *VRGInstance) kubeObjectsProtect(
 	}
 
 	*finalSyncPrepared = func() bool {
-		return v.kubeObjectsFinalSyncComplete &&
+		return v.kubeObjectsProtected != nil &&
+			v.kubeObjectsProtected.Status == metav1.ConditionTrue &&
 			v.vrgObjectProtected != nil &&
 			v.vrgObjectProtected.Status == metav1.ConditionTrue
 	}
@@ -142,12 +143,13 @@ func (v *VRGInstance) kubeObjectsCaptureStartOrResumeOrDelay(
 	}
 
 	if relocate {
-		v.kubeObjectsFinalSyncComplete = captureToRecoverFrom.StartGeneration == generation
-		if v.kubeObjectsFinalSyncComplete {
+		if captureToRecoverFrom.StartGeneration == generation {
 			v.log.Info("Kube objects capture for relocate completed previously", "number", number, "generation", generation)
 
 			return
 		}
+
+		v.kubeObjectsFinalCapturePending()
 	} else if _, delay := timeSincePreviousAndUntilNext(captureToRecoverFrom.StartTime.Time, interval); delay > 0 {
 		v.log.Info("Kube objects capture start delay", "number", number, "delay", delay)
 		delaySetIfLess(result, delay, v.log)
@@ -185,7 +187,7 @@ func (v *VRGInstance) kubeObjectsCaptureDelete(
 }
 
 const (
-	vrgGenerationKey            = "ramendr.openshift.io/vrgGeneration"
+	vrgGenerationKey            = "ramendr.openshift.io/vrg-generation"
 	vrgGenerationNumberBase     = 10
 	vrgGenerationNumberBitCount = 64
 )
@@ -282,36 +284,32 @@ func (v *VRGInstance) kubeObjectsCaptureComplete(
 		StartGeneration: startGeneration,
 	}
 
-	v.kubeObjectsProtected = newVRGClusterDataProtectedCondition(v.instance.Generation, clusterDataProtectedTrueMessage)
 	duration, delay := timeSincePreviousAndUntilNext(status.CaptureToRecoverFrom.StartTime.Time, interval)
 	relocate := vrg.Spec.PrepareForFinalSync
 	generation := vrg.GetGeneration()
 	v.log.Info("Kube objects captured", "duration", duration, "recovery point", status.CaptureToRecoverFrom,
 		"generation", generation)
 
-	if relocate {
-		v.kubeObjectsFinalSyncComplete = status.CaptureToRecoverFrom.StartGeneration == generation
-		if v.kubeObjectsFinalSyncComplete {
-			v.log.Info("Kube objects capture for relocate complete")
+	switch {
+	case relocate:
+		if status.CaptureToRecoverFrom.StartGeneration != generation {
+			v.log.Info("Kube objects capture for relocate schedule to run immediately")
+			delaySetMinimum(result)
+			v.kubeObjectsFinalCapturePending()
 
 			return
 		}
 
-		v.log.Info("Kube objects capture for relocate schedule to run immediately")
-		delaySetMinimum(result)
-
-		return
-	}
-
-	if delay <= 0 {
+		v.log.Info("Kube objects capture for relocate complete")
+	case delay <= 0:
 		v.log.Info("Kube objects capture schedule to run immediately", "delay", delay)
 		delaySetMinimum(result)
-
-		return
+	default:
+		v.log.Info("Kube objects capture schedule to run", "delay", delay)
+		delaySetIfLess(result, delay, v.log)
 	}
 
-	v.log.Info("Kube objects capture schedule to run", "delay", delay)
-	delaySetIfLess(result, delay, v.log)
+	v.kubeObjectsProtected = newVRGClusterDataProtectedCondition(generation, clusterDataProtectedTrueMessage)
 }
 
 func (v *VRGInstance) kubeObjectsCaptureFailed(message string) {
@@ -321,6 +319,13 @@ func (v *VRGInstance) kubeObjectsCaptureFailed(message string) {
 	}
 
 	v.kubeObjectsProtected = newVRGClusterDataUnprotectedCondition(v.instance.Generation, message)
+}
+
+func (v *VRGInstance) kubeObjectsFinalCapturePending() {
+	v.kubeObjectsProtected = newVRGClusterDataUnprotectedCondition(
+		v.instance.Generation,
+		"Kube objects capture for relocate pending",
+	)
 }
 
 func RecipeInfoExistsOnVRG(vrgInstance ramen.VolumeReplicationGroup) bool {
