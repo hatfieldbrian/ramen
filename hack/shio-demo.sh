@@ -115,6 +115,10 @@ app_namespace_undeploy() {
 	kubectl --context $1 delete namespace asdf --ignore-not-found
 }; exit_stack_push unset -f app_namespace_undeploy
 
+app_namespace_get() {
+	kubectl --context $1 get namespace asdf -oyaml
+}; exit_stack_push unset -f app_namespace_get
+
 app_deploy() {
 	set -- cluster1
 	app_namespace_deploy $1
@@ -149,6 +153,7 @@ app_list() {
 app_list_custom() {
 	kubectl get\
 		namespace/asdf\
+		recipe/asdf\
 		vrg/bb\
 		$(pv_names $1)\
 		-nasdf\
@@ -171,29 +176,42 @@ app_undeploy() {
 }; exit_stack_push unset -f app_undeploy
 
 vrg_deploy() {
+	cat <<-a|kubectl --context $1 -nasdf apply -f-
+	apiVersion: ramendr.openshift.io/v1alpha1
+	kind: Recipe
+	metadata:
+	  name: asdf
+	spec:
+	  appType: ""
+	  groups:
+	  - excludedResourceTypes:
+	    - deploy
+	    - po
+	    - pv
+	    - rs
+	    - volumereplications
+	    - vrg
+	    name: everything-but-deploy-po-pv-rs-vr-vrg
+	    type: resource
+	  - includedResourceTypes:
+	    - deployments
+	    - pods
+	    labelSelector: !pod-template-hash
+	    name: deployments-and-naked-pods
+	    type: resource
+	  workflows:
+	  - name: recover
+	    sequence:
+	    - group: everything-but-deploy-po-pv-rs-vr-vrg
+	    - group: deployments-and-naked-pods
+	a
 #    action: $3
 	vrg_appendix="
   kubeObjectProtection:
     captureInterval: 1m
-    recoverOrder:
-    - excludedResources:
-      - po
-      - pv
-      - rs
-      - deploy
-      - volumereplications
-      - vrg
-      restoreStatus:
-        includedResources:
-        - pvc
-      existingResourcePolicy: update
-    - includedResources:
-      - deployments
-      - pods
-      labelSelector:
-        matchExpressions:
-        - key: pod-template-hash
-          operator: DoesNotExist
+    recipeRef:
+      name: asdf
+      recoverWorkflowName: recover
 " \
 	cluster_names=$s3_store_cluster_names application_sample_namespace_name=asdf $ramen_hack_directory_path_name/minikube-ramen.sh application_sample_vrg_deploy$2 $1
 	vrg_list $1
@@ -299,7 +317,7 @@ app_failback() {
 	set -- cluster1 cluster2
 	app_undeploy_failback $1
 	set -x
-	time kubectl --context $2 -nasdf wait vrg/bb --for condition=clusterdataprotected
+	time kubectl --context $2 -nasdf wait vrg/bb --for condition=clusterdataprotected --timeout -1
 	{ set +x; } 2>/dev/null
 	app_undeploy_failback $2 app_recover_failback\ $1\ $2
 }; exit_stack_push unset -f app_failback
@@ -324,7 +342,7 @@ app_undeploy_failback() {
 	vrg_demote $1
 	# "PVC not being deleted. Not ready to become Secondary"
 	app_undeploy $1& # pvc finalizer remains until vrg deletes its vr
-	until_true_or_n 30 eval test \"\$\(kubectl --context $1 -nasdf get vrg/bb -ojsonpath='{.status.state}'\)\" = Secondary
+	until_true_or_n 30000 eval test \"\$\(kubectl --context $1 -nasdf get vrg/bb -ojsonpath='{.status.state}'\)\" = Secondary
 	$2
 	vrg_undeploy $1&
 	wait
