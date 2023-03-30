@@ -12,6 +12,35 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+func ConditionTrueAndCurrentTest(
+	objectGenerationNumber int64,
+	conditions []metav1.Condition,
+	conditionType string,
+	log logr.Logger,
+) bool {
+	return ConditionStatusAndCurrentTest(objectGenerationNumber, conditions, conditionType, log, metav1.ConditionTrue)
+}
+
+func ConditionStatusAndCurrentTest(
+	objectGenerationNumber int64,
+	conditions []metav1.Condition,
+	conditionType string,
+	log logr.Logger,
+	status metav1.ConditionStatus,
+) bool {
+	condition := meta.FindStatusCondition(conditions, conditionType)
+	if condition == nil {
+		log.Info("Condition absent", "type", conditionType)
+
+		return false
+	}
+
+	log.Info("Condition present", "condition", condition, "status", status, "generation", objectGenerationNumber)
+
+	return condition.Status == status &&
+		condition.ObservedGeneration == objectGenerationNumber
+}
+
 func GenericStatusConditionSet(
 	object client.Object,
 	conditions *[]metav1.Condition,

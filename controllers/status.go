@@ -35,10 +35,13 @@ const (
 	// protected from a disaster by uploading it to the required S3 store(s).
 	VRGConditionTypeClusterDataProtected = "ClusterDataProtected"
 
+	VRGConditionTypeFinalSyncPrepared = "FinalSyncPrepared"
+	VRGConditionTypeFinalSyncComplete = "FinalSyncComplete"
+
 	// Total number of condition types in VRG as of now. Change this value
 	// when a new condition type is added to VRG or an existing condition
 	// type is removed from VRG status.
-	VRGTotalConditions = 4
+	VRGTotalConditions = 6
 
 	// VolSync related conditions. These conditions are only applicable
 	// at individual PVCs and not generic VRG conditions.
@@ -77,39 +80,22 @@ func setVRGInitialCondition(conditions *[]metav1.Condition, observedGeneration i
 	}
 
 	time := metav1.NewTime(time.Now())
-
-	setStatusConditionIfNotFound(conditions, metav1.Condition{
-		Type:               VRGConditionTypeDataReady,
-		Reason:             VRGConditionReasonInitializing,
-		ObservedGeneration: observedGeneration,
-		Status:             metav1.ConditionUnknown,
-		LastTransitionTime: time,
-		Message:            message,
-	})
-	setStatusConditionIfNotFound(conditions, metav1.Condition{
-		Type:               VRGConditionTypeDataProtected,
-		Reason:             VRGConditionReasonInitializing,
-		ObservedGeneration: observedGeneration,
-		Status:             metav1.ConditionUnknown,
-		LastTransitionTime: time,
-		Message:            message,
-	})
-	setStatusConditionIfNotFound(conditions, metav1.Condition{
-		Type:               VRGConditionTypeClusterDataReady,
-		Reason:             VRGConditionReasonInitializing,
-		ObservedGeneration: observedGeneration,
-		Status:             metav1.ConditionUnknown,
-		LastTransitionTime: time,
-		Message:            message,
-	})
-	setStatusConditionIfNotFound(conditions, metav1.Condition{
-		Type:               VRGConditionTypeClusterDataProtected,
-		Reason:             VRGConditionReasonInitializing,
-		ObservedGeneration: observedGeneration,
-		Status:             metav1.ConditionUnknown,
-		LastTransitionTime: time,
-		Message:            message,
-	})
+	init := func(typ string) {
+		setStatusConditionIfNotFound(conditions, metav1.Condition{
+			Type:               typ,
+			Reason:             VRGConditionReasonInitializing,
+			ObservedGeneration: observedGeneration,
+			Status:             metav1.ConditionUnknown,
+			LastTransitionTime: time,
+			Message:            message,
+		})
+	}
+	init(VRGConditionTypeDataReady)
+	init(VRGConditionTypeDataProtected)
+	init(VRGConditionTypeClusterDataReady)
+	init(VRGConditionTypeClusterDataProtected)
+	init(VRGConditionTypeFinalSyncPrepared)
+	init(VRGConditionTypeFinalSyncComplete)
 }
 
 // sets conditions when VRG as Secondary is replicating the data with Primary.

@@ -92,12 +92,13 @@ func (v *VRGInstance) reconcileVolSyncAsPrimary() (requeue bool) {
 		return requeue
 	}
 
+	vrg := v.instance
 	if v.instance.Spec.PrepareForFinalSync {
-		v.instance.Status.PrepareForFinalSyncComplete = true
+		setVRGFinalSyncPrepared(vrg, "VolSync")
 	}
 
 	if v.instance.Spec.RunFinalSync {
-		v.instance.Status.FinalSyncComplete = true
+		setVRGFinalSyncComplete(vrg, "VolSync")
 	}
 
 	v.log.Info("Successfully reconciled VolSync as Primary")
@@ -178,10 +179,6 @@ func (v *VRGInstance) reconcileVolSyncAsSecondary() bool {
 		v.instance.Status.ProtectedPVCs = v.instance.Status.ProtectedPVCs[:idx]
 		v.log.Info("Protected PVCs left", "ProtectedPVCs", v.instance.Status.ProtectedPVCs)
 	}
-
-	// Reset status finalsync flags and condition
-	v.instance.Status.PrepareForFinalSyncComplete = false
-	v.instance.Status.FinalSyncComplete = false
 
 	// We no longer need to have conditions for the secondary VRG
 	if len(v.instance.Spec.VolSync.RDSpec) > 0 && len(v.instance.Status.Conditions) > 0 {

@@ -26,13 +26,16 @@ import (
 )
 
 func (v *VRGInstance) updateFinalSyncStatus() {
-	// We don't need the final sync preparation for VolRep. Just mark it complete
+	vrg := v.instance
+
+	const message = "We don't need the final sync preparation for VolRep. Just mark it complete"
 	if v.instance.Spec.PrepareForFinalSync && len(v.volSyncPVCs) == 0 {
-		v.instance.Status.PrepareForFinalSyncComplete = true
+		setVRGFinalSyncPrepared(vrg, message)
 	}
-	// We don't need to run the final sync for VolRep. Just mark it complete
+
+	const message2 = "We don't need to run the final sync for VolRep. Just mark it complete"
 	if v.instance.Spec.RunFinalSync && len(v.volSyncPVCs) == 0 {
-		v.instance.Status.FinalSyncComplete = true
+		setVRGFinalSyncComplete(vrg, message2)
 	}
 }
 

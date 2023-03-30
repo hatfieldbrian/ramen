@@ -584,8 +584,6 @@ spec:
                             - type
                             type: object
                           type: array
-                        finalSyncComplete:
-                          type: boolean
                         kubeObjectProtection:
                           properties:
                             captureToRecoverFrom:
@@ -615,8 +613,6 @@ spec:
                             the operator has dealt with
                           format: int64
                           type: integer
-                        prepareForFinalSyncComplete:
-                          type: boolean
                         protectedPVCs:
                           description: All the protected pvcs
                           items:

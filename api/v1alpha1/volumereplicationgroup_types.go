@@ -256,9 +256,6 @@ type VolumeReplicationGroupStatus struct {
 	//+optional
 	KubeObjectProtection KubeObjectProtectionStatus `json:"kubeObjectProtection,omitempty"`
 
-	PrepareForFinalSyncComplete bool `json:"prepareForFinalSyncComplete,omitempty"`
-	FinalSyncComplete           bool `json:"finalSyncComplete,omitempty"`
-
 	// lastGroupSyncTime is the time of the most recent successful synchronization of all PVCs
 	//+optional
 	LastGroupSyncTime *metav1.Time `json:"lastGroupSyncTime,omitempty"`

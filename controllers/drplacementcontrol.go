@@ -648,7 +648,7 @@ func (d *DRPCInstance) prepareForFinalSync(homeCluster string) (bool, error) {
 		return !done, fmt.Errorf("VRG not found on Cluster %s", homeCluster)
 	}
 
-	if !vrg.Status.PrepareForFinalSyncComplete {
+	if !vrgConditionTrueAndCurrentTest(*vrg, VRGConditionTypeFinalSyncPrepared, d.log) {
 		err := d.updateVRGToPrepareForFinalSync(homeCluster)
 		if err != nil {
 			return !done, err
@@ -678,7 +678,7 @@ func (d *DRPCInstance) runFinalSync(homeCluster string) (bool, error) {
 		return !done, fmt.Errorf("VRG not found on Cluster %s", homeCluster)
 	}
 
-	if !vrg.Status.FinalSyncComplete {
+	if !vrgConditionTrueAndCurrentTest(*vrg, VRGConditionTypeFinalSyncComplete, d.log) {
 		err := d.updateVRGToRunFinalSync(homeCluster)
 		if err != nil {
 			return !done, err
@@ -802,17 +802,7 @@ func (d *DRPCInstance) isVRGConditionMet(cluster string, conditionType string) b
 		return !ready
 	}
 
-	condition := findCondition(vrg.Status.Conditions, conditionType)
-	if condition == nil {
-		d.log.Info(fmt.Sprintf("VRG %s condition not available on cluster %s", conditionType, cluster))
-
-		return !ready
-	}
-
-	d.log.Info(fmt.Sprintf("VRG status condition: %+v", condition))
-
-	return condition.Status == metav1.ConditionTrue &&
-		condition.ObservedGeneration == vrg.Generation
+	return vrgConditionTrueAndCurrentTest(*vrg, conditionType, d.log)
 }
 
 func (d *DRPCInstance) relocate(preferredCluster, preferredClusterNamespace string, drState rmn.DRState) (bool, error) {

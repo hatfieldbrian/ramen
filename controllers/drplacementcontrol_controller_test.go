@@ -258,21 +258,26 @@ func isRestorePVsComplete() bool {
 func (f FakeMCVGetter) GetVRGFromManagedCluster(resourceName, resourceNamespace, managedCluster string,
 	annnotations map[string]string,
 ) (*rmn.VolumeReplicationGroup, error) {
-	conType := controllers.VRGConditionTypeDataReady
-	reason := controllers.VRGConditionReasonReplicating
+	time := metav1.Now()
+	condition := func(conType, reason string) metav1.Condition {
+		return metav1.Condition{
+			Type:               conType,
+			Reason:             reason,
+			Status:             metav1.ConditionTrue,
+			Message:            "Testing VRG",
+			LastTransitionTime: time,
+			ObservedGeneration: 1,
+		}
+	}
+
+	const finalSyncConditionReason = "asdf"
+
 	vrgStatus := rmn.VolumeReplicationGroupStatus{
-		State:                       rmn.PrimaryState,
-		PrepareForFinalSyncComplete: true,
-		FinalSyncComplete:           true,
+		State: rmn.PrimaryState,
 		Conditions: []metav1.Condition{
-			{
-				Type:               conType,
-				Reason:             reason,
-				Status:             metav1.ConditionTrue,
-				Message:            "Testing VRG",
-				LastTransitionTime: metav1.Now(),
-				ObservedGeneration: 1,
-			},
+			condition(controllers.VRGConditionTypeDataReady, controllers.VRGConditionReasonReplicating),
+			condition(controllers.VRGConditionTypeFinalSyncPrepared, finalSyncConditionReason),
+			condition(controllers.VRGConditionTypeFinalSyncComplete, finalSyncConditionReason),
 		},
 		ProtectedPVCs: []rmn.ProtectedPVC{},
 	}
