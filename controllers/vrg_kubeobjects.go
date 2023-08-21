@@ -675,7 +675,7 @@ func kubeObjectsRequestsWatch(b *builder.Builder, kubeObjects kubeobjects.Reques
 
 				return []reconcile.Request{}
 			}),
-			builder.WithPredicates(ResourceVersionUpdatePredicate{}),
+			builder.WithPredicates(util.ResourceVersionUpdatePredicate{}),
 		)
 	}
 
