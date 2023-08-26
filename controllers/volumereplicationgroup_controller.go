@@ -100,6 +100,7 @@ func (r *VolumeReplicationGroupReconciler) SetupWithManager(
 	if !ramenConfig.KubeObjectProtection.Disabled {
 		r.Log.Info("Kube object protection enabled; watch kube objects requests")
 		kubeObjectsRequestsWatch(builder, r.kubeObjects)
+		vrgValidatorWebhookRegister(mgr)
 	} else {
 		r.Log.Info("Kube object protection disabled; don't watch kube objects requests")
 	}
@@ -414,6 +415,8 @@ type VRGInstance struct {
 }
 
 const (
+	vrgKindName     = "VolumeReplicationGroup"
+	vrgResourceName = "volumereplicationgroups"
 	// Finalizers
 	vrgFinalizerName        = "volumereplicationgroups.ramendr.openshift.io/vrg-protection"
 	pvcVRFinalizerProtected = "volumereplicationgroups.ramendr.openshift.io/pvc-vr-protection"
