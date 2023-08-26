@@ -63,3 +63,23 @@ webhooks:
     resources:
     - drpolicies
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-ramendr-openshift-io-v1alpha1-volumereplicationgroup
+  failurePolicy: Fail
+  name: vvolumereplicationgroup.kb.io
+  rules:
+  - apiGroups:
+    - ramendr.openshift.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - volumereplicationgroups
+  sideEffects: None
