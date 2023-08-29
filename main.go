@@ -35,9 +35,10 @@ import (
 	ramendrv1alpha1 "github.com/ramendr/ramen/api/v1alpha1"
 
 	argov1alpha1 "github.com/argoproj/argo-cd/v2/pkg/apis/application/v1alpha1"
+	recipe "github.com/ramendr/recipe/api/v1alpha1"
+
 	"github.com/ramendr/ramen/controllers"
 	rmnutil "github.com/ramendr/ramen/controllers/util"
-	recipe "github.com/ramendr/recipe/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -216,6 +217,10 @@ func main() {
 
 	setupReconcilers(mgr, ramenConfig)
 
+	if err = (&ramendrv1alpha1.VolumeReplicationGroup{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "VolumeReplicationGroup")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
