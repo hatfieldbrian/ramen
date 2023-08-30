@@ -217,10 +217,6 @@ func main() {
 
 	setupReconcilers(mgr, ramenConfig)
 
-	if err = (&ramendrv1alpha1.VolumeReplicationGroup{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "VolumeReplicationGroup")
-		os.Exit(1)
-	}
 	// +kubebuilder:scaffold:builder
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
