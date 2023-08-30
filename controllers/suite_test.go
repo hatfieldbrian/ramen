@@ -5,7 +5,9 @@ package controllers_test
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -134,6 +136,9 @@ var _ = BeforeSuite(func() {
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "config", "crd", "bases"),
 			filepath.Join("..", "hack", "test"),
+		},
+		WebhookInstallOptions: envtest.WebhookInstallOptions{
+			Paths: []string{filepath.Join("..", "config", "webhook")},
 		},
 	}
 
@@ -296,7 +301,16 @@ var _ = BeforeSuite(func() {
 	s3ProfilesSecretNamespaceNameSet()
 	s3ProfilesUpdate()
 
-	options, err := manager.Options{Scheme: scheme.Scheme}.AndFrom(ramenConfig)
+	// start webhook server using Manager
+	webhookInstallOptions := &testEnv.WebhookInstallOptions
+	options, err := manager.Options{
+		Scheme:             scheme.Scheme,
+		Host:               webhookInstallOptions.LocalServingHost,
+		Port:               webhookInstallOptions.LocalServingPort,
+		CertDir:            webhookInstallOptions.LocalServingCertDir,
+		LeaderElection:     false,
+		MetricsBindAddress: "0",
+	}.AndFrom(ramenConfig)
 	Expect(err).NotTo(HaveOccurred())
 
 	// test controller behavior
@@ -358,6 +372,8 @@ var _ = BeforeSuite(func() {
 	err = drpcReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
+	//+kubebuilder:scaffold:webhook
+
 	ctx, cancel = context.WithCancel(context.TODO())
 	go func() {
 		err = k8sManager.Start(ctx)
@@ -369,6 +385,19 @@ var _ = BeforeSuite(func() {
 	apiReader = k8sManager.GetAPIReader()
 	Expect(apiReader).ToNot(BeNil())
 	objectStorersSet()
+
+	// wait for the webhook server to get ready
+	dialer := &net.Dialer{Timeout: time.Second}
+	addrPort := fmt.Sprintf("%s:%d", webhookInstallOptions.LocalServingHost, webhookInstallOptions.LocalServingPort)
+	Eventually(func() error {
+		conn, err := tls.DialWithDialer(dialer, "tcp", addrPort, &tls.Config{InsecureSkipVerify: true}) //nolint:gosec
+		if err != nil {
+			return err
+		}
+		conn.Close()
+
+		return nil
+	}).Should(Succeed())
 })
 
 var _ = AfterSuite(func() {
