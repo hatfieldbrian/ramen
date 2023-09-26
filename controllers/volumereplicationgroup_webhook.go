@@ -60,6 +60,16 @@ func (v *vrgValidator) Handle(ctx context.Context, req admission.Request) admiss
 			fmt.Errorf("recipe %#v retrieval error: %w", recipeNamespacedName, err))
 	}
 
+	if err := recipeParametersExpand(recipe, vrg.Spec.KubeObjectProtection.RecipeParameters); err != nil {
+		return admission.Errored(http.StatusInternalServerError,
+			fmt.Errorf("recipe %+v vrg %+v parameter expansion error: %w", recipe, vrg, err))
+	}
+
+	return v.recipeNamespacesValidate(ctx, req, recipe)
+}
+
+func (v *vrgValidator) recipeNamespacesValidate(ctx context.Context, req admission.Request, recipe *recipe.Recipe,
+) admission.Response {
 	namespaceNames := make(sets.Set[string], 0)
 
 	if recipe.Spec.Volumes != nil {
