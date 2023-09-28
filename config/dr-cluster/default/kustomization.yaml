@@ -12,6 +12,10 @@ namePrefix: ramen-dr-cluster-
 #commonLabels:
 #  someName: someValue
 
+
+# [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
+# crd/kustomization.yaml
+# [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER'. 'WEBHOOK' components are required.
 transformers:
 - |-
   apiVersion: builtin
@@ -31,12 +35,6 @@ transformers:
     path: metadata/labels
   - kind: Service
     path: spec/selector
-
-# [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
-# crd/kustomization.yaml
-#- ../webhook
-# [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER'. 'WEBHOOK' components are required.
-#- ../certmanager
 # [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
 #- ../prometheus
 
@@ -46,18 +44,48 @@ transformers:
 
 # Mount the controller config file for loading manager configurations
 # through a ComponentConfig type
-patchesStrategicMerge:
-- ../../default/manager_auth_proxy_patch.yaml
-- ../../default/manager_config_patch.yaml
 
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
 # crd/kustomization.yaml
-#- manager_webhook_patch.yaml
 
 # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER'.
 # Uncomment 'CERTMANAGER' sections in crd/kustomization.yaml to enable the CA injection in the admission webhooks.
 # 'CERTMANAGER' needs to be enabled to use ca injection
-#- webhookcainjection_patch.yaml
+patchesStrategicMerge:
+- ../../default/manager_auth_proxy_patch.yaml
+- ../../default/manager_config_patch.yaml
+- ../../default/manager_webhook_patch.yaml
+- ../../default/webhookcainjection_patch-validating.yaml
+
+vars:
+- fieldref:
+    fieldPath: metadata.namespace
+  name: CERTIFICATE_NAMESPACE
+  objref:
+    group: cert-manager.io
+    kind: Certificate
+    name: serving-cert
+    version: v1
+- fieldref: {}
+  name: CERTIFICATE_NAME
+  objref:
+    group: cert-manager.io
+    kind: Certificate
+    name: serving-cert
+    version: v1
+- fieldref:
+    fieldPath: metadata.namespace
+  name: SERVICE_NAMESPACE
+  objref:
+    kind: Service
+    name: webhook-service
+    version: v1
+- fieldref: {}
+  name: SERVICE_NAME
+  objref:
+    kind: Service
+    name: webhook-service
+    version: v1
 
 # the following config is for teaching kustomize how to do var substitution
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -66,6 +94,8 @@ resources:
 - ../crd
 - ../rbac
 - ../manager
+- ../../webhook
+- ../../certmanager
 images:
 - name: kube-rbac-proxy
   newName: gcr.io/kubebuilder/kube-rbac-proxy
