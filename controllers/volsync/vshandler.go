@@ -1455,8 +1455,8 @@ func ConvertSchedulingIntervalToCronSpec(schedulingInterval string) (*string, er
 	return &cronSpec, nil
 }
 
-func (v *VSHandler) IsRSDataProtected(pvcName string) (bool, error) {
-	l := v.log.WithValues("pvcName", pvcName)
+func (v *VSHandler) IsRSDataProtected(pvcNamespace, pvcName string) (bool, error) {
+	l := v.log.WithValues("pvc", pvcNamespace+"/"+pvcName)
 
 	// Get RD instance
 	rs := &volsyncv1alpha1.ReplicationSource{}
@@ -1464,7 +1464,7 @@ func (v *VSHandler) IsRSDataProtected(pvcName string) (bool, error) {
 	err := v.client.Get(v.ctx,
 		types.NamespacedName{
 			Name:      getReplicationSourceName(pvcName),
-			Namespace: v.owner.GetNamespace(),
+			Namespace: pvcNamespace,
 		}, rs)
 	if err != nil {
 		if !kerrors.IsNotFound(err) {
@@ -1473,7 +1473,7 @@ func (v *VSHandler) IsRSDataProtected(pvcName string) (bool, error) {
 			return false, fmt.Errorf("%w", err)
 		}
 
-		l.Info("No ReplicationSource found", "pvcName", pvcName)
+		l.Info("No ReplicationSource found")
 
 		return false, nil
 	}

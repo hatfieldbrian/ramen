@@ -30,7 +30,7 @@ func (v *VRGInstance) restorePVsForVolSync() error {
 		if err != nil {
 			v.log.Info(fmt.Sprintf("Unable to ensure PVC %v -- err: %v", rdSpec, err))
 
-			protectedPVC := v.findProtectedPVC(rdSpec.ProtectedPVC.Name)
+			protectedPVC := v.findProtectedPVC(rdSpec.ProtectedPVC.Namespace, rdSpec.ProtectedPVC.Name)
 			if protectedPVC == nil {
 				protectedPVC = &ramendrv1alpha1.ProtectedPVC{}
 				rdSpec.ProtectedPVC.DeepCopyInto(protectedPVC)
@@ -45,7 +45,7 @@ func (v *VRGInstance) restorePVsForVolSync() error {
 
 		numPVsRestored++
 
-		protectedPVC := v.findProtectedPVC(rdSpec.ProtectedPVC.Name)
+		protectedPVC := v.findProtectedPVC(rdSpec.ProtectedPVC.Namespace, rdSpec.ProtectedPVC.Name)
 		if protectedPVC == nil {
 			protectedPVC = &ramendrv1alpha1.ProtectedPVC{}
 			rdSpec.ProtectedPVC.DeepCopyInto(protectedPVC)
@@ -111,6 +111,7 @@ func (v *VRGInstance) reconcileVolSyncAsPrimary(finalSyncPrepared *bool) (requeu
 
 func (v *VRGInstance) reconcilePVCAsVolSyncPrimary(pvc corev1.PersistentVolumeClaim) (requeue bool) {
 	newProtectedPVC := &ramendrv1alpha1.ProtectedPVC{
+		Namespace:          pvc.Namespace,
 		Name:               pvc.Name,
 		ProtectedByVolSync: true,
 		StorageClassName:   pvc.Spec.StorageClassName,
@@ -120,7 +121,7 @@ func (v *VRGInstance) reconcilePVCAsVolSyncPrimary(pvc corev1.PersistentVolumeCl
 		Resources:          pvc.Spec.Resources,
 	}
 
-	protectedPVC := v.findProtectedPVC(pvc.Name)
+	protectedPVC := v.findProtectedPVC(pvc.Namespace, pvc.Name)
 	if protectedPVC == nil {
 		protectedPVC = newProtectedPVC
 		v.instance.Status.ProtectedPVCs = append(v.instance.Status.ProtectedPVCs, *protectedPVC)
@@ -309,7 +310,7 @@ func (v *VRGInstance) buildDataProtectedCondition() *metav1.Condition {
 				}
 
 				// Check now if we have synced up at least once for this PVC
-				rsDataProtected, err := v.volSyncHandler.IsRSDataProtected(protectedPVC.Name)
+				rsDataProtected, err := v.volSyncHandler.IsRSDataProtected(protectedPVC.Namespace, protectedPVC.Name)
 				if err != nil || !rsDataProtected {
 					ready = false
 
