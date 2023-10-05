@@ -445,6 +445,7 @@ var _ = Describe("VolSync_Handler", func() {
 
 			rdSpec := ramendrv1alpha1.VolSyncReplicationDestinationSpec{
 				ProtectedPVC: ramendrv1alpha1.ProtectedPVC{
+					Namespace:          testNamespace.GetName(),
 					Name:               "mytestpvc",
 					ProtectedByVolSync: true,
 					StorageClassName:   &testStorageClassName,
@@ -1860,7 +1861,7 @@ var _ = Describe("VolSync_Handler", func() {
 	Describe("Prepare PVC for final sync", func() {
 		Context("When the PVC does not exist", func() {
 			It("Should assume preparationForFinalSync is complete", func() {
-				pvcPreparationComplete, err := vsHandler.TakePVCOwnership("this-pvc-does-not-exist")
+				pvcPreparationComplete, err := vsHandler.TakePVCOwnership(testNamespace.GetName(), "this-pvc-does-not-exist")
 				Expect(err).To(HaveOccurred())
 				Expect(kerrors.IsNotFound(err)).To(BeTrue())
 				Expect(pvcPreparationComplete).To(BeFalse())
@@ -1887,7 +1888,7 @@ var _ = Describe("VolSync_Handler", func() {
 			var pvcPreparationErr error
 
 			JustBeforeEach(func() {
-				pvcPreparationComplete, pvcPreparationErr = vsHandler.TakePVCOwnership(testPVC.GetName())
+				pvcPreparationComplete, pvcPreparationErr = vsHandler.TakePVCOwnership(testPVC.GetNamespace(), testPVC.GetName())
 
 				// In all cases at this point we should expect that the PVC has ownership taken over by our owner VRG
 				Eventually(func() bool {

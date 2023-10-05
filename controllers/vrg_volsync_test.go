@@ -280,6 +280,7 @@ var _ = Describe("VolumeReplicationGroupVolSyncController", func() {
 					testVrg.Spec.VolSync.RDSpec = []ramendrv1alpha1.VolSyncReplicationDestinationSpec{
 						{
 							ProtectedPVC: ramendrv1alpha1.ProtectedPVC{
+								Namespace:          testNamespace.GetName(),
 								Name:               "testingpvc-a",
 								ProtectedByVolSync: true,
 								StorageClassName:   &storageClassName,
@@ -290,6 +291,7 @@ var _ = Describe("VolumeReplicationGroupVolSyncController", func() {
 						},
 						{
 							ProtectedPVC: ramendrv1alpha1.ProtectedPVC{
+								Namespace:          testNamespace.GetName(),
 								Name:               "testingpvc-b",
 								ProtectedByVolSync: true,
 								StorageClassName:   &storageClassName,
