@@ -63,7 +63,7 @@ func (v *vrgValidator) Handle(ctx context.Context, req admission.Request) admiss
 			fmt.Errorf("recipe %#v retrieval error: %w", recipeNamespacedName, err))
 	}
 
-	if err := recipeParametersExpand(recipe, vrg.Spec.KubeObjectProtection.RecipeParameters); err != nil {
+	if err := RecipeParametersExpand(recipe, vrg.Spec.KubeObjectProtection.RecipeParameters); err != nil {
 		return admission.Errored(http.StatusInternalServerError,
 			fmt.Errorf("recipe %+v vrg %+v parameter expansion error: %w", recipe, vrg, err))
 	}
