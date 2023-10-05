@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/go-logr/logr"
 	ramen "github.com/ramendr/ramen/api/v1alpha1"
 	recipe "github.com/ramendr/recipe/api/v1alpha1"
 	authentication "k8s.io/api/authentication/v1"
@@ -24,6 +25,7 @@ func vrgValidatorWebhookRegister(mgr manager.Manager) {
 		"/validate-ramendr-openshift-io-v1alpha1-volumereplicationgroup",
 		&admission.Webhook{Handler: &vrgValidator{
 			client:  mgr.GetClient(),
+			log:     mgr.GetLogger().WithName("webhook").WithName("vrg").WithName("validate"),
 			decoder: func() *admission.Decoder { d, _ := admission.NewDecoder(mgr.GetScheme()); return d }(), //nolint:errcheck,nlreturn,lll
 			// TODO fix with controller-runtime v0.15+
 			// decoder: admission.NewDecoder(mgr.GetScheme()),
@@ -33,16 +35,25 @@ func vrgValidatorWebhookRegister(mgr manager.Manager) {
 
 type vrgValidator struct {
 	client  client.Client
+	log     logr.Logger
 	decoder *admission.Decoder
 }
 
 var _ admission.Handler = &vrgValidator{}
 
 func (v *vrgValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+	log := v.log
+
 	vrg := &ramen.VolumeReplicationGroup{}
 	if err := v.decoder.Decode(req, vrg); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
+
+	vrgNamespacedName := types.NamespacedName{
+		Namespace: vrg.Namespace,
+		Name:      vrg.Name,
+	}
+	log = log.WithValues("vrg", vrgNamespacedName.String())
 
 	if vrg.Spec.KubeObjectProtection == nil ||
 		vrg.Spec.KubeObjectProtection.RecipeRef == nil {
@@ -60,7 +71,7 @@ func (v *vrgValidator) Handle(ctx context.Context, req admission.Request) admiss
 			fmt.Errorf("recipe %#v retrieval error: %w", recipeNamespacedName, err))
 	}
 
-	if err := RecipeParametersExpand(recipe, vrg.Spec.KubeObjectProtection.RecipeParameters); err != nil {
+	if err := RecipeParametersExpand(recipe, vrg.Spec.KubeObjectProtection.RecipeParameters, log); err != nil {
 		return admission.Errored(http.StatusInternalServerError,
 			fmt.Errorf("recipe %+v vrg %+v parameter expansion error: %w", recipe, vrg, err))
 	}
