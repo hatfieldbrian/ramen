@@ -90,12 +90,13 @@ func (r *VolumeReplicationGroupReconciler) SetupWithManager(
 			handler.EnqueueRequestsFromMapFunc(r.rdMapFunc),
 			builder.WithPredicates(replicationDestinationPredicateFunc()),
 		).
-		Watches(&source.Kind{Type: &corev1.ConfigMap{}}, handler.EnqueueRequestsFromMapFunc(r.configMapFun)).
-		Owns(&volrep.VolumeReplication{})
+		Watches(&source.Kind{Type: &corev1.ConfigMap{}}, handler.EnqueueRequestsFromMapFunc(r.configMapFun))
+
+	rmnutil.OwnsAcrossNamespaces(builder, &volrep.VolumeReplication{})
 
 	if !ramenConfig.VolSync.Disabled {
-		builder.Owns(&volsyncv1alpha1.ReplicationDestination{}).
-			Owns(&volsyncv1alpha1.ReplicationSource{})
+		rmnutil.OwnsAcrossNamespaces(builder, &volsyncv1alpha1.ReplicationDestination{})
+		rmnutil.OwnsAcrossNamespaces(builder, &volsyncv1alpha1.ReplicationSource{})
 	} else {
 		r.Log.Info("VolSync disabled; don't own volsync resources")
 	}
