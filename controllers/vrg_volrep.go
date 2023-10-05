@@ -1084,6 +1084,8 @@ func (v *VRGInstance) updateVR(volRep *volrep.VolumeReplication,
 
 // createVR creates a VolumeReplication CR with a PVC as its data source.
 func (v *VRGInstance) createVR(vrNamespacedName types.NamespacedName, state volrep.ReplicationState) error {
+	vrg := v.instance
+
 	volumeReplicationClass, err := v.selectVolumeReplicationClass(vrNamespacedName)
 	if err != nil {
 		return fmt.Errorf("failed to find the appropriate VolumeReplicationClass (%s) %w",
@@ -1094,6 +1096,7 @@ func (v *VRGInstance) createVR(vrNamespacedName types.NamespacedName, state volr
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      vrNamespacedName.Name,
 			Namespace: vrNamespacedName.Namespace,
+			Labels:    rmnutil.OwnerLabels(vrg.Namespace, vrg.Name),
 		},
 		Spec: volrep.VolumeReplicationSpec{
 			DataSource: corev1.TypedLocalObjectReference{
@@ -1105,13 +1108,6 @@ func (v *VRGInstance) createVR(vrNamespacedName types.NamespacedName, state volr
 			VolumeReplicationClass: volumeReplicationClass.GetName(),
 			AutoResync:             v.autoResync(state),
 		},
-	}
-
-	// Let VRG receive notification for any changes to VolumeReplication CR
-	// created by VRG.
-	if err := ctrl.SetControllerReference(v.instance, volRep, v.reconciler.Scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference to VolumeReplication resource (%s/%s), %w",
-			volRep.Name, volRep.Namespace, err)
 	}
 
 	v.log.Info("Creating VolumeReplication resource", "resource", volRep)
