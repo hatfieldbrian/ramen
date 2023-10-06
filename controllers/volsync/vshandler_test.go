@@ -25,6 +25,7 @@ import (
 
 	volsyncv1alpha1 "github.com/backube/volsync/api/v1alpha1"
 	ramendrv1alpha1 "github.com/ramendr/ramen/api/v1alpha1"
+	"github.com/ramendr/ramen/controllers/util"
 	"github.com/ramendr/ramen/controllers/volsync"
 )
 
@@ -38,7 +39,7 @@ const (
 	testCleanupLabelValue = "true"
 )
 
-var _ = Describe("VolSync Handler - utils", func() {
+var _ = Describe("VolSync_Handler - utils", func() {
 	Context("When converting scheduling interval to cronspec for VolSync", func() {
 		It("Should successfully convert an interval specified in minutes", func() {
 			cronSpecSchedule, err := volsync.ConvertSchedulingIntervalToCronSpec("10m")
@@ -75,7 +76,7 @@ var _ = Describe("VolSync Handler - utils", func() {
 	})
 })
 
-var _ = Describe("VolSync Handler - Volume Replication Class tests", func() {
+var _ = Describe("VolSync_Handler - Volume Replication Class tests", func() {
 	asyncSpec := &ramendrv1alpha1.VRGAsyncSpec{
 		SchedulingInterval:          "1h",
 		VolumeSnapshotClassSelector: metav1.LabelSelector{},
@@ -399,6 +400,7 @@ var _ = Describe("VolSync Handler - Volume Replication Class tests", func() {
 var _ = Describe("VolSync_Handler", func() {
 	var testNamespace *corev1.Namespace
 	var owner metav1.Object
+	var ownerNamespacedName types.NamespacedName
 	var vsHandler *volsync.VSHandler
 
 	asyncSpec := &ramendrv1alpha1.VRGAsyncSpec{
@@ -429,6 +431,7 @@ var _ = Describe("VolSync_Handler", func() {
 		Expect(k8sClient.Create(ctx, ownerCm)).To(Succeed())
 		Expect(ownerCm.GetName()).NotTo(BeEmpty())
 		owner = ownerCm
+		ownerNamespacedName = types.NamespacedName{Namespace: owner.GetNamespace(), Name: owner.GetName()}
 
 		vsHandler = volsync.NewVSHandler(ctx, k8sClient, logger, owner, asyncSpec, "none", "Snapshot")
 	})
@@ -562,6 +565,7 @@ var _ = Describe("VolSync_Handler", func() {
 
 						// Expect the RD should be owned by owner
 						Expect(ownerMatches(createdRD, owner.GetName(), "ConfigMap", true /*should be controller*/)).To(BeTrue())
+						Expect(util.OwnerNamespacedName(createdRD.GetLabels())).To(Equal(ownerNamespacedName))
 
 						// Check common fields
 						Expect(createdRD.Spec.RsyncTLS).NotTo(BeNil())
@@ -586,6 +590,7 @@ var _ = Describe("VolSync_Handler", func() {
 							// The psk secret should be updated to be owned by the VRG
 							return ownerMatches(dummyPSKSecret, owner.GetName(), "ConfigMap", false)
 						}, maxWait, interval).Should(BeTrue())
+						Expect(util.OwnerNamespacedName(dummyPSKSecret.GetLabels())).To(Equal(ownerNamespacedName))
 
 						// Check that the service export is created for this RD
 						svcExport := &unstructured.Unstructured{}
@@ -900,6 +905,7 @@ var _ = Describe("VolSync_Handler", func() {
 								return ownerMatches(createdRS, owner.GetName(), "ConfigMap",
 									true /* Should be controller */)
 							}, maxWait, interval).Should(BeTrue())
+							Expect(util.OwnerNamespacedName(createdRS.GetLabels())).To(Equal(ownerNamespacedName))
 
 							// Check that the volsync psk secret has been updated to have our vrg as owner
 							Eventually(func() bool {
@@ -911,6 +917,7 @@ var _ = Describe("VolSync_Handler", func() {
 								// The psk secret should be updated to be owned by the VRG
 								return ownerMatches(dummyPSKSecret, owner.GetName(), "ConfigMap", false)
 							}, maxWait, interval).Should(BeTrue())
+							Expect(util.OwnerNamespacedName(dummyPSKSecret.GetLabels())).To(Equal(ownerNamespacedName))
 
 							// Check common fields
 							Expect(createdRS.Spec.SourcePVC).To(Equal(rsSpec.ProtectedPVC.Name))
@@ -1251,6 +1258,7 @@ var _ = Describe("VolSync_Handler", func() {
 						// will be the controller owning it
 						return ownerMatches(latestImageSnap, owner.GetName(), "ConfigMap", false /* not controller */)
 					}, maxWait, interval).Should(BeTrue())
+					Expect(util.OwnerNamespacedName(latestImageSnap.GetLabels())).To(Equal(ownerNamespacedName))
 				})
 
 				Context("When the snapshot has restoreSize specified in Gi but PVC had storage in G", func() {
@@ -1814,6 +1822,7 @@ var _ = Describe("VolSync_Handler", func() {
 					// configmap owner is faking out VRG
 					return ownerMatches(testPVC, owner.GetName(), "ConfigMap", false)
 				}, maxWait, interval).Should(BeTrue())
+				Expect(util.OwnerNamespacedName(testPVC.GetLabels())).To(Equal(ownerNamespacedName))
 			})
 
 			It("Should complete successfully, return true and remove ACM annotations", func() {
