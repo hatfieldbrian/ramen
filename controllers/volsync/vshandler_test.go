@@ -229,6 +229,7 @@ var _ = Describe("VolSync Handler - Volume Replication Class tests", func() {
 
 			// Create an RSSpec from the testSourcePVC
 			protectedPVC := &ramendrv1alpha1.ProtectedPVC{
+				Namespace:          testNamespace.GetName(),
 				Name:               testSourcePVC.Name,
 				ProtectedByVolSync: true,
 				StorageClassName:   testSourcePVC.Spec.StorageClassName,
@@ -246,8 +247,7 @@ var _ = Describe("VolSync Handler - Volume Replication Class tests", func() {
 			storageClassForTest := &storagev1.StorageClass{}
 			Expect(k8sClient.Get(ctx,
 				types.NamespacedName{
-					Name:      *testRsSpec.ProtectedPVC.StorageClassName,
-					Namespace: testNamespace.GetName(),
+					Name: *testRsSpec.ProtectedPVC.StorageClassName,
 				},
 				storageClassForTest)).To(Succeed())
 
@@ -443,20 +443,24 @@ var _ = Describe("VolSync_Handler", func() {
 		Context("When reconciling RDSpec", func() {
 			capacity := resource.MustParse("2Gi")
 
-			rdSpec := ramendrv1alpha1.VolSyncReplicationDestinationSpec{
-				ProtectedPVC: ramendrv1alpha1.ProtectedPVC{
-					Namespace:          testNamespace.GetName(),
-					Name:               "mytestpvc",
-					ProtectedByVolSync: true,
-					StorageClassName:   &testStorageClassName,
-					Resources: corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceStorage: capacity,
+			var rdSpec ramendrv1alpha1.VolSyncReplicationDestinationSpec
+
+			BeforeEach(func() {
+				rdSpec = ramendrv1alpha1.VolSyncReplicationDestinationSpec{
+					ProtectedPVC: ramendrv1alpha1.ProtectedPVC{
+						Namespace:          testNamespace.GetName(),
+						Name:               "mytestpvc",
+						ProtectedByVolSync: true,
+						StorageClassName:   &testStorageClassName,
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceStorage: capacity,
+							},
 						},
+						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 					},
-					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-				},
-			}
+				}
+			})
 
 			createdRD := &volsyncv1alpha1.ReplicationDestination{}
 			var returnedRD *volsyncv1alpha1.ReplicationDestination
@@ -475,7 +479,7 @@ var _ = Describe("VolSync_Handler", func() {
 					// ReconcileRD should not have created the replication destination - since the secret isn't there
 					Consistently(func() error {
 						return k8sClient.Get(ctx,
-							types.NamespacedName{Name: rdSpec.ProtectedPVC.Name, Namespace: testNamespace.GetName()}, createdRD)
+							types.NamespacedName{Name: rdSpec.ProtectedPVC.Name, Namespace: rdSpec.ProtectedPVC.Namespace}, createdRD)
 					}, 1*time.Second, interval).ShouldNot(BeNil())
 				})
 			})
@@ -511,7 +515,7 @@ var _ = Describe("VolSync_Handler", func() {
 						rs = &volsyncv1alpha1.ReplicationSource{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      rdSpec.ProtectedPVC.Name, // RS should be named based on the pvc
-								Namespace: testNamespace.GetName(),
+								Namespace: rdSpec.ProtectedPVC.Namespace,
 								Labels: map[string]string{
 									// Need to simulate that it's owned by our VRG by using our label
 									volsync.VRGOwnerLabel: owner.GetName(),
@@ -552,7 +556,7 @@ var _ = Describe("VolSync_Handler", func() {
 						Eventually(func() error {
 							return k8sClient.Get(ctx, types.NamespacedName{
 								Name:      rdSpec.ProtectedPVC.Name,
-								Namespace: testNamespace.GetName(),
+								Namespace: rdSpec.ProtectedPVC.Namespace,
 							}, createdRD)
 						}, maxWait, interval).Should(Succeed())
 
@@ -608,7 +612,7 @@ var _ = Describe("VolSync_Handler", func() {
 							rdPrecreate := &volsyncv1alpha1.ReplicationDestination{
 								ObjectMeta: metav1.ObjectMeta{
 									Name:      rdSpec.ProtectedPVC.Name,
-									Namespace: testNamespace.GetName(),
+									Namespace: rdSpec.ProtectedPVC.Namespace,
 								},
 								// Empty spec - will expect the reconcile to fill this out properly for us (i.e. update)
 								Spec: volsyncv1alpha1.ReplicationDestinationSpec{},
@@ -683,7 +687,7 @@ var _ = Describe("VolSync_Handler", func() {
 					Eventually(func() error {
 						return k8sClient.Get(ctx, types.NamespacedName{
 							Name:      rdSpec.ProtectedPVC.Name,
-							Namespace: testNamespace.GetName(),
+							Namespace: rdSpec.ProtectedPVC.Namespace,
 						}, createdRD)
 					}, maxWait, interval).Should(Succeed())
 
@@ -716,7 +720,7 @@ var _ = Describe("VolSync_Handler", func() {
 					Eventually(func() error {
 						return k8sClient.Get(ctx, types.NamespacedName{
 							Name:      rdSpec.ProtectedPVC.Name + "-local",
-							Namespace: testNamespace.GetName(),
+							Namespace: rdSpec.ProtectedPVC.Namespace,
 						}, localRD)
 					}, maxWait, interval).Should(Succeed())
 
@@ -762,11 +766,12 @@ var _ = Describe("VolSync_Handler", func() {
 					Eventually(func() error {
 						return k8sClient.Get(ctx, types.NamespacedName{
 							Name:      rdSpec.ProtectedPVC.Name,
-							Namespace: testNamespace.GetName(),
+							Namespace: rdSpec.ProtectedPVC.Namespace,
 						}, pvc)
 					}, maxWait, interval).Should(Succeed())
 
 					Expect(pvc.GetName()).To(Equal(rdSpec.ProtectedPVC.Name))
+					Expect(pvc.GetNamespace()).To(Equal(rdSpec.ProtectedPVC.Namespace))
 					Expect(pvc.GetOwnerReferences()[0].Kind).To(Equal("ConfigMap"))
 				})
 			})
@@ -778,19 +783,24 @@ var _ = Describe("VolSync_Handler", func() {
 			capacity := resource.MustParse("3Gi")
 			testPVCName := "mytestpvc"
 
-			rsSpec := ramendrv1alpha1.VolSyncReplicationSourceSpec{
-				ProtectedPVC: ramendrv1alpha1.ProtectedPVC{
-					Name:               testPVCName,
-					ProtectedByVolSync: true,
-					StorageClassName:   &testStorageClassName,
-					Resources: corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceStorage: capacity,
+			var rsSpec ramendrv1alpha1.VolSyncReplicationSourceSpec
+
+			BeforeEach(func() {
+				rsSpec = ramendrv1alpha1.VolSyncReplicationSourceSpec{
+					ProtectedPVC: ramendrv1alpha1.ProtectedPVC{
+						Namespace:          testNamespace.GetName(),
+						Name:               testPVCName,
+						ProtectedByVolSync: true,
+						StorageClassName:   &testStorageClassName,
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceStorage: capacity,
+							},
 						},
+						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 					},
-					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-				},
-			}
+				}
+			})
 
 			createdRS := &volsyncv1alpha1.ReplicationSource{}
 
@@ -811,7 +821,7 @@ var _ = Describe("VolSync_Handler", func() {
 					// ReconcileRS should not have created the replication source - since the secret isn't there
 					Consistently(func() error {
 						return k8sClient.Get(ctx,
-							types.NamespacedName{Name: rsSpec.ProtectedPVC.Name, Namespace: testNamespace.GetName()}, createdRS)
+							types.NamespacedName{Name: rsSpec.ProtectedPVC.Name, Namespace: rsSpec.ProtectedPVC.Namespace}, createdRS)
 					}, 1*time.Second, interval).ShouldNot(BeNil())
 				})
 			})
@@ -850,7 +860,7 @@ var _ = Describe("VolSync_Handler", func() {
 						// ReconcileRS should not have created the replication source - since the secret isn't there
 						Consistently(func() error {
 							return k8sClient.Get(ctx,
-								types.NamespacedName{Name: rsSpec.ProtectedPVC.Name, Namespace: testNamespace.GetName()}, createdRS)
+								types.NamespacedName{Name: rsSpec.ProtectedPVC.Name, Namespace: rsSpec.ProtectedPVC.Namespace}, createdRS)
 						}, 1*time.Second, interval).ShouldNot(BeNil())
 					})
 				})
@@ -858,7 +868,7 @@ var _ = Describe("VolSync_Handler", func() {
 				Context("When the PVC to be protected is mounted by a pod that is NOT in running phase", func() {
 					JustBeforeEach(func() {
 						// Create PVC and pod that is mounting it - pod phase will be "Pending"
-						createDummyPVCAndMountingPod(testPVCName, testNamespace.GetName(),
+						createDummyPVCAndMountingPod(testPVCName, rsSpec.ProtectedPVC.Namespace,
 							capacity, map[string]string{"a": "b"}, corev1.PodPending, false)
 					})
 
@@ -872,7 +882,7 @@ var _ = Describe("VolSync_Handler", func() {
 						// ReconcileRS should not have created the RS - since the pod is not in running phase
 						Consistently(func() error {
 							return k8sClient.Get(ctx,
-								types.NamespacedName{Name: rsSpec.ProtectedPVC.Name, Namespace: testNamespace.GetName()}, createdRS)
+								types.NamespacedName{Name: rsSpec.ProtectedPVC.Name, Namespace: rsSpec.ProtectedPVC.Namespace}, createdRS)
 						}, 1*time.Second, interval).ShouldNot(BeNil())
 					})
 				})
@@ -880,7 +890,7 @@ var _ = Describe("VolSync_Handler", func() {
 				Context("When the PVC to be protected is mounted by a pod that is NOT Ready", func() {
 					JustBeforeEach(func() {
 						// Create PVC and pod that is mounting it (pod phase will be "Pending" by default)
-						createDummyPVCAndMountingPod(testPVCName, testNamespace.GetName(),
+						createDummyPVCAndMountingPod(testPVCName, rsSpec.ProtectedPVC.Namespace,
 							capacity, map[string]string{"a": "b"}, corev1.PodRunning, false /* not ready */)
 					})
 
@@ -895,7 +905,7 @@ var _ = Describe("VolSync_Handler", func() {
 						// ReconcileRS should not have created the RS - since the pod is not Ready
 						Consistently(func() error {
 							return k8sClient.Get(ctx,
-								types.NamespacedName{Name: rsSpec.ProtectedPVC.Name, Namespace: testNamespace.GetName()}, createdRS)
+								types.NamespacedName{Name: rsSpec.ProtectedPVC.Name, Namespace: rsSpec.ProtectedPVC.Namespace}, createdRS)
 						}, 1*time.Second, interval).ShouldNot(BeNil())
 					})
 				})
@@ -907,7 +917,7 @@ var _ = Describe("VolSync_Handler", func() {
 					// Fake out pod mounting and in Running/Ready state
 					JustBeforeEach(func() {
 						// Create PVC and pod that is mounting it (and set pod phase to "Running")
-						testPVC, podMountingPVC = createDummyPVCAndMountingPod(testPVCName, testNamespace.GetName(),
+						testPVC, podMountingPVC = createDummyPVCAndMountingPod(testPVCName, rsSpec.ProtectedPVC.Namespace,
 							capacity, nil, corev1.PodRunning, true /* pod should be Ready */)
 					})
 
@@ -918,7 +928,7 @@ var _ = Describe("VolSync_Handler", func() {
 							rd = &volsyncv1alpha1.ReplicationDestination{
 								ObjectMeta: metav1.ObjectMeta{
 									Name:      rsSpec.ProtectedPVC.Name,
-									Namespace: testNamespace.GetName(),
+									Namespace: rsSpec.ProtectedPVC.Namespace,
 									Labels: map[string]string{
 										// Need to simulate that it's owned by our VRG by using our label
 										volsync.VRGOwnerLabel: owner.GetName(),
@@ -943,7 +953,7 @@ var _ = Describe("VolSync_Handler", func() {
 							Eventually(func() error {
 								return k8sClient.Get(ctx, types.NamespacedName{
 									Name:      rsSpec.ProtectedPVC.Name,
-									Namespace: testNamespace.GetName(),
+									Namespace: rsSpec.ProtectedPVC.Namespace,
 								}, createdRS)
 							}, maxWait, interval).Should(Succeed())
 
@@ -977,7 +987,7 @@ var _ = Describe("VolSync_Handler", func() {
 								err := k8sClient.Get(ctx,
 									types.NamespacedName{
 										Name:      rsSpec.ProtectedPVC.Name,
-										Namespace: testNamespace.GetName(),
+										Namespace: rsSpec.ProtectedPVC.Namespace,
 									},
 									createdRS)
 								if err != nil {
@@ -1006,7 +1016,7 @@ var _ = Describe("VolSync_Handler", func() {
 							// Note owner here is faking out a VRG - psk secret name will be based on the owner (VRG) name
 							Expect(*createdRS.Spec.RsyncTLS.KeySecret).To(Equal(volsync.GetVolSyncPSKSecretNameFromVRGName(owner.GetName())))
 							Expect(*createdRS.Spec.RsyncTLS.Address).To(Equal("volsync-rsync-tls-dst-" +
-								rsSpec.ProtectedPVC.Name + "." + testNamespace.GetName() + ".svc.clusterset.local"))
+								rsSpec.ProtectedPVC.Name + "." + rsSpec.ProtectedPVC.Namespace + ".svc.clusterset.local"))
 
 							Expect(*createdRS.Spec.RsyncTLS.VolumeSnapshotClassName).To(Equal(testVolumeSnapshotClassName))
 
@@ -1030,7 +1040,7 @@ var _ = Describe("VolSync_Handler", func() {
 								rsPrecreate = &volsyncv1alpha1.ReplicationSource{
 									ObjectMeta: metav1.ObjectMeta{
 										Name:      rsSpec.ProtectedPVC.Name,
-										Namespace: testNamespace.GetName(),
+										Namespace: rsSpec.ProtectedPVC.Namespace,
 										Labels: map[string]string{
 											"customlabel1": "somevaluehere",
 										},
@@ -1120,7 +1130,7 @@ var _ = Describe("VolSync_Handler", func() {
 												err := k8sClient.Get(ctx,
 													types.NamespacedName{
 														Name:      rsSpec.ProtectedPVC.Name,
-														Namespace: testNamespace.GetName(),
+														Namespace: rsSpec.ProtectedPVC.Namespace,
 													},
 													createdRS)
 												if err != nil || createdRS.Spec.Trigger == nil {
@@ -1198,6 +1208,7 @@ var _ = Describe("VolSync_Handler", func() {
 		BeforeEach(func() {
 			rdSpec = ramendrv1alpha1.VolSyncReplicationDestinationSpec{
 				ProtectedPVC: ramendrv1alpha1.ProtectedPVC{
+					Namespace:          testNamespace.GetName(),
 					Name:               pvcName,
 					ProtectedByVolSync: true,
 					StorageClassName:   &testStorageClassName,
@@ -1227,7 +1238,7 @@ var _ = Describe("VolSync_Handler", func() {
 				rd := &volsyncv1alpha1.ReplicationDestination{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      pvcName,
-						Namespace: testNamespace.GetName(),
+						Namespace: rdSpec.ProtectedPVC.Namespace,
 					},
 					Spec: volsyncv1alpha1.ReplicationDestinationSpec{
 						RsyncTLS: &volsyncv1alpha1.ReplicationDestinationRsyncTLSSpec{},
@@ -1254,7 +1265,7 @@ var _ = Describe("VolSync_Handler", func() {
 				rd := &volsyncv1alpha1.ReplicationDestination{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      pvcName,
-						Namespace: testNamespace.GetName(),
+						Namespace: rdSpec.ProtectedPVC.Namespace,
 					},
 					Spec: volsyncv1alpha1.ReplicationDestinationSpec{
 						RsyncTLS: &volsyncv1alpha1.ReplicationDestinationRsyncTLSSpec{},
@@ -1728,6 +1739,7 @@ var _ = Describe("VolSync_Handler", func() {
 			for i := 0; i < 10; i++ {
 				rsSpec := ramendrv1alpha1.VolSyncReplicationSourceSpec{
 					ProtectedPVC: ramendrv1alpha1.ProtectedPVC{
+						Namespace:          testNamespace.GetName(),
 						Name:               pvcNamePrefix + strconv.Itoa(i),
 						ProtectedByVolSync: true,
 						StorageClassName:   &testStorageClassName,
@@ -1802,7 +1814,7 @@ var _ = Describe("VolSync_Handler", func() {
 
 			for _, rsSpec := range rsSpecList {
 				// Create the PVC to be protected and pod that is mounting it (and set pod Running/Ready)
-				createDummyPVCAndMountingPod(rsSpec.ProtectedPVC.Name, testNamespace.GetName(),
+				createDummyPVCAndMountingPod(rsSpec.ProtectedPVC.Name, rsSpec.ProtectedPVC.Namespace,
 					capacity, nil, corev1.PodRunning, true)
 
 				// create RSs using our vsHandler
@@ -1812,7 +1824,7 @@ var _ = Describe("VolSync_Handler", func() {
 			}
 			for _, rsSpecOtherOwner := range rsSpecListOtherOwner {
 				// Create the PVC to be protected and pod that is mounting it (and set pod Running/Ready)
-				createDummyPVCAndMountingPod(rsSpecOtherOwner.ProtectedPVC.Name, testNamespace.GetName(),
+				createDummyPVCAndMountingPod(rsSpecOtherOwner.ProtectedPVC.Name, rsSpecOtherOwner.ProtectedPVC.Namespace,
 					capacity, nil, corev1.PodRunning, true)
 
 				// create other RSs using another vsHandler (will be owned by another VRG)
