@@ -891,10 +891,9 @@ func (v *VSHandler) listRDByOwner() (volsyncv1alpha1.ReplicationDestinationList,
 // Lists only RS/RD with VRGOwnerLabel that matches the owner
 func (v *VSHandler) listByOwner(list client.ObjectList) error {
 	matchLabels := map[string]string{
-		VRGOwnerLabel: v.owner.GetName(),
+		VRGOwnerLabel: v.owner.GetNamespace() + "/" + v.owner.GetName(),
 	}
 	listOptions := []client.ListOption{
-		client.InNamespace(v.owner.GetNamespace()),
 		client.MatchingLabels(matchLabels),
 	}
 
@@ -1603,7 +1602,7 @@ func addVRGOwnerLabel(owner, obj metav1.Object) {
 		labels = make(map[string]string)
 	}
 
-	labels[VRGOwnerLabel] = owner.GetName()
+	labels[VRGOwnerLabel] = owner.GetNamespace() + "/" + owner.GetName()
 	obj.SetLabels(labels)
 }
 
