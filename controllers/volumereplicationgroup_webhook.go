@@ -64,7 +64,7 @@ func (v *vrgValidator) Handle(ctx context.Context, req admission.Request) admiss
 	}
 
 	recipeNamespacedName := types.NamespacedName{
-		Namespace: vrg.Namespace,
+		Namespace: vrg.Spec.KubeObjectProtection.RecipeRef.Namespace,
 		Name:      vrg.Spec.KubeObjectProtection.RecipeRef.Name,
 	}
 
