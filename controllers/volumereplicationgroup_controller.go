@@ -88,11 +88,11 @@ func (r *VolumeReplicationGroupReconciler) SetupWithManager(
 		).
 		Watches(&source.Kind{Type: &corev1.ConfigMap{}}, handler.EnqueueRequestsFromMapFunc(r.configMapFun))
 
-	rmnutil.OwnsAcrossNamespaces(builder, &volrep.VolumeReplication{})
+	rmnutil.OwnsAcrossNamespaces(builder, r.Scheme, &volrep.VolumeReplication{})
 
 	if !ramenConfig.VolSync.Disabled {
-		rmnutil.OwnsAcrossNamespaces(builder, &volsyncv1alpha1.ReplicationDestination{})
-		rmnutil.OwnsAcrossNamespaces(builder, &volsyncv1alpha1.ReplicationSource{})
+		rmnutil.OwnsAcrossNamespaces(builder, r.Scheme, &volsyncv1alpha1.ReplicationDestination{})
+		rmnutil.OwnsAcrossNamespaces(builder, r.Scheme, &volsyncv1alpha1.ReplicationSource{})
 	} else {
 		r.Log.Info("VolSync disabled; don't own volsync resources")
 	}
@@ -100,7 +100,7 @@ func (r *VolumeReplicationGroupReconciler) SetupWithManager(
 	r.kubeObjects = velero.RequestsManager{}
 	if !ramenConfig.KubeObjectProtection.Disabled {
 		r.Log.Info("Kube object protection enabled; watch kube objects requests")
-		kubeObjectsRequestsWatch(builder, r.kubeObjects)
+		kubeObjectsRequestsWatch(builder, r.Scheme, r.kubeObjects)
 		vrgValidatorWebhookRegister(mgr)
 	} else {
 		r.Log.Info("Kube object protection disabled; don't watch kube objects requests")
