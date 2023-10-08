@@ -187,7 +187,7 @@ var _ = Describe("VolumeReplicationGroupVolSyncController", func() {
 
 						rs0 := &volsyncv1alpha1.ReplicationSource{}
 						Expect(k8sClient.Get(testCtx, types.NamespacedName{
-							Name: boundPvcs[0].GetName(), Namespace: testNamespace.GetName(),
+							Name: boundPvcs[0].GetName(), Namespace: boundPvcs[0].GetNamespace(),
 						}, rs0)).To(Succeed())
 						Expect(rs0.Spec.SourcePVC).To(Equal(boundPvcs[0].GetName()))
 						Expect(rs0.Spec.Trigger).NotTo(BeNil())
@@ -195,7 +195,7 @@ var _ = Describe("VolumeReplicationGroupVolSyncController", func() {
 
 						rs1 := &volsyncv1alpha1.ReplicationSource{}
 						Expect(k8sClient.Get(testCtx, types.NamespacedName{
-							Name: boundPvcs[1].GetName(), Namespace: testNamespace.GetName(),
+							Name: boundPvcs[1].GetName(), Namespace: boundPvcs[1].GetNamespace(),
 						}, rs1)).To(Succeed())
 						Expect(rs1.Spec.SourcePVC).To(Equal(boundPvcs[1].GetName()))
 						Expect(rs1.Spec.Trigger).NotTo(BeNil())
@@ -203,7 +203,7 @@ var _ = Describe("VolumeReplicationGroupVolSyncController", func() {
 
 						rs2 := &volsyncv1alpha1.ReplicationSource{}
 						Expect(k8sClient.Get(testCtx, types.NamespacedName{
-							Name: boundPvcs[2].GetName(), Namespace: testNamespace.GetName(),
+							Name: boundPvcs[2].GetName(), Namespace: boundPvcs[2].GetNamespace(),
 						}, rs2)).To(Succeed())
 						Expect(rs2.Spec.SourcePVC).To(Equal(boundPvcs[2].GetName()))
 						Expect(rs2.Spec.Trigger).NotTo(BeNil())
@@ -320,11 +320,11 @@ var _ = Describe("VolumeReplicationGroupVolSyncController", func() {
 
 					Expect(k8sClient.Get(testCtx, types.NamespacedName{
 						Name:      testVrg.Spec.VolSync.RDSpec[0].ProtectedPVC.Name,
-						Namespace: testNamespace.GetName(),
+						Namespace: testVrg.Spec.VolSync.RDSpec[0].ProtectedPVC.Namespace,
 					}, rd0)).To(Succeed())
 					Expect(k8sClient.Get(testCtx, types.NamespacedName{
 						Name:      testVrg.Spec.VolSync.RDSpec[1].ProtectedPVC.Name,
-						Namespace: testNamespace.GetName(),
+						Namespace: testVrg.Spec.VolSync.RDSpec[1].ProtectedPVC.Namespace,
 					}, rd1)).To(Succeed())
 				})
 

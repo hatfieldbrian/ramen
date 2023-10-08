@@ -144,7 +144,8 @@ func (d *DRPCInstance) containsMismatchVolSyncPVCs(srcVRG *rmn.VolumeReplication
 		mismatch := true
 
 		for _, rdSpec := range dstVRG.Spec.VolSync.RDSpec {
-			if protectedPVC.Name == rdSpec.ProtectedPVC.Name {
+			if protectedPVC.Name == rdSpec.ProtectedPVC.Name &&
+				protectedPVC.Namespace == rdSpec.ProtectedPVC.Namespace {
 				mismatch = false
 
 				break

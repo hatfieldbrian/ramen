@@ -577,7 +577,7 @@ func (v *VSHandler) pvcExistsAndInUse(pvcNamespacedName types.NamespacedName, in
 
 	log.V(1).Info("pvc found")
 
-	inUseByPod, err := util.IsPVCInUseByPod(v.ctx, v.client, v.log, pvc.GetName(), pvc.GetNamespace(), inUsePodMustBeReady)
+	inUseByPod, err := util.IsPVCInUseByPod(v.ctx, v.client, v.log, pvcNamespacedName, inUsePodMustBeReady)
 	if err != nil || inUseByPod || inUsePodMustBeReady {
 		// Return status immediately
 		return inUseByPod, err
@@ -1090,7 +1090,7 @@ func (v *VSHandler) rollbackToLastSnapshot(rdSpec ramendrv1alpha1.VolSyncReplica
 	}
 
 	// Check if the app PVC is used by any pod. Otherwise, we'll wait.
-	inUse, err := util.IsPVCInUseByPod(v.ctx, v.client, v.log, rdSpec.ProtectedPVC.Name, v.owner.GetNamespace(), false)
+	inUse, err := util.IsPVCInUseByPod(v.ctx, v.client, v.log, pvcNamespacedName, false)
 	if err != nil {
 		return err
 	}

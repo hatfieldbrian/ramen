@@ -776,7 +776,7 @@ var _ = Describe("VolSync_Handler", func() {
 				Context("When the PVC to be protected is mounted by a pod that is NOT in running phase", func() {
 					JustBeforeEach(func() {
 						// Create PVC and pod that is mounting it - pod phase will be "Pending"
-						createDummyPVCAndMountingPod(testPVCName, rsSpec.ProtectedPVC.Namespace,
+						createDummyPVCAndMountingPod(rsSpec.ProtectedPVC.Name, rsSpec.ProtectedPVC.Namespace,
 							capacity, map[string]string{"a": "b"}, corev1.PodPending, false)
 					})
 
@@ -798,7 +798,7 @@ var _ = Describe("VolSync_Handler", func() {
 				Context("When the PVC to be protected is mounted by a pod that is NOT Ready", func() {
 					JustBeforeEach(func() {
 						// Create PVC and pod that is mounting it (pod phase will be "Pending" by default)
-						createDummyPVCAndMountingPod(testPVCName, rsSpec.ProtectedPVC.Namespace,
+						createDummyPVCAndMountingPod(rsSpec.ProtectedPVC.Name, rsSpec.ProtectedPVC.Namespace,
 							capacity, map[string]string{"a": "b"}, corev1.PodRunning, false /* not ready */)
 					})
 
@@ -825,7 +825,7 @@ var _ = Describe("VolSync_Handler", func() {
 					// Fake out pod mounting and in Running/Ready state
 					JustBeforeEach(func() {
 						// Create PVC and pod that is mounting it (and set pod phase to "Running")
-						testPVC, podMountingPVC = createDummyPVCAndMountingPod(testPVCName, rsSpec.ProtectedPVC.Namespace,
+						testPVC, podMountingPVC = createDummyPVCAndMountingPod(rsSpec.ProtectedPVC.Name, rsSpec.ProtectedPVC.Namespace,
 							capacity, nil, corev1.PodRunning, true /* pod should be Ready */)
 					})
 
@@ -1147,7 +1147,7 @@ var _ = Describe("VolSync_Handler", func() {
 				// Pre-create the replication destination
 				rd := &volsyncv1alpha1.ReplicationDestination{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      pvcName,
+						Name:      rdSpec.ProtectedPVC.Name,
 						Namespace: rdSpec.ProtectedPVC.Namespace,
 					},
 					Spec: volsyncv1alpha1.ReplicationDestinationSpec{
@@ -1174,7 +1174,7 @@ var _ = Describe("VolSync_Handler", func() {
 				// Pre-create the replication destination
 				rd := &volsyncv1alpha1.ReplicationDestination{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      pvcName,
+						Name:      rdSpec.ProtectedPVC.Name,
 						Namespace: rdSpec.ProtectedPVC.Namespace,
 					},
 					Spec: volsyncv1alpha1.ReplicationDestinationSpec{
@@ -1456,6 +1456,7 @@ var _ = Describe("VolSync_Handler", func() {
 			for i := 0; i < 10; i++ {
 				rdSpec := ramendrv1alpha1.VolSyncReplicationDestinationSpec{
 					ProtectedPVC: ramendrv1alpha1.ProtectedPVC{
+						Namespace:          testNamespace.GetName(),
 						Name:               pvcNamePrefix + strconv.Itoa(i),
 						ProtectedByVolSync: true,
 						StorageClassName:   &testStorageClassName,
@@ -1485,6 +1486,7 @@ var _ = Describe("VolSync_Handler", func() {
 			for i := 0; i < 2; i++ {
 				otherOwnerRdSpec := ramendrv1alpha1.VolSyncReplicationDestinationSpec{
 					ProtectedPVC: ramendrv1alpha1.ProtectedPVC{
+						Namespace:          testNamespace.GetName(),
 						Name:               pvcNamePrefixOtherOwner + strconv.Itoa(i),
 						ProtectedByVolSync: true,
 						StorageClassName:   &testStorageClassName,
@@ -1676,6 +1678,7 @@ var _ = Describe("VolSync_Handler", func() {
 			for i := 0; i < 2; i++ {
 				otherOwnerRsSpec := ramendrv1alpha1.VolSyncReplicationSourceSpec{
 					ProtectedPVC: ramendrv1alpha1.ProtectedPVC{
+						Namespace:          testNamespace.GetName(),
 						Name:               pvcNamePrefixOtherOwner + strconv.Itoa(i),
 						ProtectedByVolSync: true,
 						StorageClassName:   &testStorageClassName,
