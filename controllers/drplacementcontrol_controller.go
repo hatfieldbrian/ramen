@@ -477,6 +477,10 @@ func DRPCsFailingOverToClusterForPolicy(
 //
 //nolint:funlen
 func (r *DRPlacementControlReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := (&rmn.DRPlacementControl{}).SetupWebhookWithManager(mgr); err != nil {
+		return errorswrapper.Wrap(err, "unable to create DRPlacementControl webhook")
+	}
+
 	mwPred := ManifestWorkPredicateFunc()
 
 	mwMapFun := handler.EnqueueRequestsFromMapFunc(handler.MapFunc(func(obj client.Object) []reconcile.Request {

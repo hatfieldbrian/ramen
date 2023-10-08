@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
+	pkgerrors "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -387,6 +388,10 @@ func (u *drpolicyUpdater) finalizerRemove() error {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *DRPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := (&ramen.DRPolicy{}).SetupWebhookWithManager(mgr); err != nil {
+		return pkgerrors.Wrap(err, "unable to create DRPolicy webhook")
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ramen.DRPolicy{}).
 		Watches(
