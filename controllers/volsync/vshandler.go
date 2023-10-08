@@ -587,7 +587,7 @@ func (v *VSHandler) pvcExistsAndInUse(pvcNamespacedName types.NamespacedName, in
 
 	log.V(1).Info("pvc found")
 
-	inUseByPod, err := util.IsPVCInUseByPod(v.ctx, v.client, v.log, pvc.GetName(), pvc.GetNamespace(), inUsePodMustBeReady)
+	inUseByPod, err := util.IsPVCInUseByPod(v.ctx, v.client, v.log, pvcNamespacedName, inUsePodMustBeReady)
 	if err != nil || inUseByPod || inUsePodMustBeReady {
 		// Return status immediately
 		return inUseByPod, err

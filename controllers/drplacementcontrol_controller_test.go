@@ -410,7 +410,10 @@ func (f FakeMCVGetter) GetVRGFromManagedCluster(resourceName, resourceNamespace,
 	switch getFunctionNameAtIndex(2) {
 	case "updateResourceCondition":
 		for i := 0; i < pvcCount; i++ {
-			vrg.Status.ProtectedPVCs = append(vrg.Status.ProtectedPVCs, rmn.ProtectedPVC{Name: fmt.Sprintf("fakePVC%d", i)})
+			vrg.Status.ProtectedPVCs = append(vrg.Status.ProtectedPVCs, rmn.ProtectedPVC{
+				Namespace: resourceNamespace,
+				Name:      fmt.Sprintf("fakePVC%d", i),
+			})
 		}
 
 		return vrg, nil
@@ -472,6 +475,7 @@ func (f FakeMCVGetter) GetVRGFromManagedCluster(resourceName, resourceNamespace,
 			})
 
 			protectedPVC := &rmn.ProtectedPVC{}
+			protectedPVC.Namespace = resourceNamespace
 			protectedPVC.Name = "random name"
 			protectedPVC.StorageIdentifiers.ReplicationID.ID = MModeReplicationID
 			protectedPVC.StorageIdentifiers.StorageProvisioner = MModeCSIProvisioner
