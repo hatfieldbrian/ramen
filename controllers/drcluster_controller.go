@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	ocmworkv1 "github.com/open-cluster-management/api/work/v1"
+	pkgerrors "github.com/pkg/errors"
 	viewv1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/view/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -77,6 +78,10 @@ const (
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *DRClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := (&ramen.DRCluster{}).SetupWebhookWithManager(mgr); err != nil {
+		return pkgerrors.Wrap(err, "unable to create DRCluster webhook")
+	}
+
 	drpcMapFun := handler.EnqueueRequestsFromMapFunc(handler.MapFunc(func(obj client.Object) []reconcile.Request {
 		drpc, ok := obj.(*ramen.DRPlacementControl)
 		if !ok {
