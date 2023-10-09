@@ -59,12 +59,8 @@ func updateDRClusterManifestWorkStatus(clusterNamespace string) {
 	}
 	mw := &workv1.ManifestWork{}
 
-	Eventually(func() bool {
-		err := apiReader.Get(context.TODO(), manifestLookupKey, mw)
-
-		return err == nil
-	}, timeout, interval).Should(BeTrue(),
-		fmt.Sprintf("failed to get manifest for DRCluster %s", clusterNamespace))
+	Eventually(apiReader.Get, timeout, interval).WithArguments(context.TODO(), manifestLookupKey, mw).
+		Should(Succeed(), fmt.Sprintf("failed to get manifest for DRCluster %s", clusterNamespace))
 
 	timeOld := time.Now().Local()
 	timeMostRecent := timeOld.Add(time.Second)

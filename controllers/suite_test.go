@@ -20,7 +20,9 @@ import (
 	"github.com/onsi/gomega/format"
 	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -92,6 +94,25 @@ func TestAPIs(t *testing.T) {
 func namespaceCreate(name string) {
 	Expect(k8sClient.Create(context.TODO(),
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}})).To(Succeed())
+}
+
+func NamespaceCreateAndDeferDelete(ctx context.Context, name string) {
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
+	Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+	DeferCleanup(func(ctx context.Context) error {
+		if err := k8sClient.Delete(ctx, ns); err != nil {
+			return err
+		}
+
+		if !namespaceDeletionSupported {
+			return nil
+		}
+
+		Eventually(k8sClient.Get).WithArguments(ctx, types.NamespacedName{Name: ns.Name}, ns).
+			Should(MatchError(errors.NewNotFound(schema.GroupResource{Resource: "namespaces"}, ns.Name)))
+
+		return nil
+	}, ctx)
 }
 
 func createOperatorNamespace(ramenNamespace string) {
