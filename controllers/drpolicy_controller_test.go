@@ -238,8 +238,10 @@ var _ = Describe("DrpolicyController", func() {
 		drpolicyObjectMetaReset(drpolicyNumber)
 	})
 	When("a 1st drpolicy is created", func() {
-		It("should create a secret placement rule for each cluster specified in a 1st drpolicy", func() {
+		BeforeEach(func() {
 			drpolicyCreate(drpolicy)
+		})
+		It("should create a secret placement rule for each cluster specified in a 1st drpolicy", func() {
 			validatedConditionExpect(drpolicy, metav1.ConditionTrue, Ignore())
 			vaildateSecretDistribution(drpolicies[0:1])
 		})

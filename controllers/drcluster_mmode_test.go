@@ -138,7 +138,15 @@ var _ = Describe("DRClusterMModeTests", Ordered, func() {
 
 		By("starting the DRCluster reconciler")
 
-		options, err := manager.Options{Scheme: scheme.Scheme}.AndFrom(ramenConfig)
+		webhookInstallOptions := &testEnv.WebhookInstallOptions
+		options, err := manager.Options{
+			Scheme:             scheme.Scheme,
+			Host:               webhookInstallOptions.LocalServingHost,
+			Port:               webhookInstallOptions.LocalServingPort,
+			CertDir:            webhookInstallOptions.LocalServingCertDir,
+			LeaderElection:     false,
+			MetricsBindAddress: "0",
+		}.AndFrom(ramenConfig)
 		Expect(err).NotTo(HaveOccurred())
 
 		k8sManager, err := ctrl.NewManager(cfg, options)
