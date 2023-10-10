@@ -32,8 +32,8 @@ DEFAULT_CHANNEL := alpha
 endif
 BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 
-IMAGE_REGISTRY ?= quay.io
-IMAGE_REPOSITORY ?= ramendr
+IMAGE_REGISTRY ?= docker.io
+IMAGE_REPOSITORY ?= liduck
 IMAGE_NAME ?= ramen
 IMAGE_TAG ?= latest
 PLATFORM ?= k8s
@@ -91,7 +91,7 @@ endif
 
 GO_TEST_GINKGO_ARGS ?= -test.v -ginkgo.v -ginkgo.fail-fast
 
-DOCKERCMD ?= podman
+DOCKERCMD ?= docker
 
 ENVTEST_K8S_VERSION = 1.25.0
 ENVTEST_ASSETS_DIR = $(shell pwd)/testbin
