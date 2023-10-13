@@ -12,7 +12,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	ramen "github.com/ramendr/ramen/api/v1alpha1"
-	"github.com/ramendr/ramen/controllers/kubeobjects"
 	recipe "github.com/ramendr/recipe/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -20,15 +19,15 @@ import (
 
 type RecipeElements struct {
 	PvcSelector     PvcSelector
-	CaptureWorkflow []kubeobjects.CaptureSpec
-	RecoverWorkflow []kubeobjects.RecoverSpec
+	CaptureWorkflow []ramen.CaptureSpec
+	RecoverWorkflow []ramen.RecoverSpec
 }
 
-func captureWorkflowDefault(vrg ramen.VolumeReplicationGroup) []kubeobjects.CaptureSpec {
-	return []kubeobjects.CaptureSpec{
+func captureWorkflowDefault(vrg ramen.VolumeReplicationGroup) []ramen.CaptureSpec {
+	return []ramen.CaptureSpec{
 		{
-			Spec: kubeobjects.Spec{
-				KubeResourcesSpec: kubeobjects.KubeResourcesSpec{
+			OperationSpec: ramen.OperationSpec{
+				ResourcesSpec: ramen.ResourcesSpec{
 					IncludedNamespaces: []string{vrg.Namespace},
 				},
 			},
@@ -36,7 +35,7 @@ func captureWorkflowDefault(vrg ramen.VolumeReplicationGroup) []kubeobjects.Capt
 	}
 }
 
-func recoverWorkflowDefault() []kubeobjects.RecoverSpec { return []kubeobjects.RecoverSpec{{}} }
+func recoverWorkflowDefault() []ramen.RecoverSpec { return []ramen.RecoverSpec{{}} }
 
 func GetPVCSelector(ctx context.Context, reader client.Reader, vrg ramen.VolumeReplicationGroup,
 	log logr.Logger,

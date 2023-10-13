@@ -10,8 +10,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/ramendr/ramen/controllers/kubeobjects"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ramen "github.com/ramendr/ramen/api/v1alpha1"
@@ -72,26 +70,26 @@ var _ = Describe("VRG_KubeObjectProtection", func() {
 
 	Context("Conversion", func() {
 		It("Hook to CaptureSpec", func() {
-			targetCaptureSpec := &kubeobjects.CaptureSpec{
+			targetCaptureSpec := &ramen.CaptureSpec{
 				Name: hook.Name + "-" + hook.Ops[0].Name,
-				Spec: kubeobjects.Spec{
-					KubeResourcesSpec: kubeobjects.KubeResourcesSpec{
+				OperationSpec: ramen.OperationSpec{
+					ResourcesSpec: ramen.ResourcesSpec{
 						IncludedNamespaces: []string{namespaceName},
 						IncludedResources:  []string{"pod"},
 						ExcludedResources:  []string{},
-						Hooks: []kubeobjects.HookSpec{
-							{
-								Name:          hook.Ops[0].Name,
-								Type:          hook.Type,
-								Command:       hook.Ops[0].Command,
-								Timeout:       hook.Ops[0].Timeout,
-								Container:     &hook.Ops[0].Container,
-								LabelSelector: hook.LabelSelector,
-							},
-						},
 					},
 					LabelSelector:           hook.LabelSelector,
 					IncludeClusterResources: new(bool),
+					Hooks: []ramen.HookSpec{
+						{
+							Name:          hook.Ops[0].Name,
+							Type:          hook.Type,
+							Command:       hook.Ops[0].Command,
+							Timeout:       hook.Ops[0].Timeout,
+							Container:     &hook.Ops[0].Container,
+							LabelSelector: hook.LabelSelector,
+						},
+					},
 				},
 			}
 			converted, err := convertRecipeHookToCaptureSpec(*hook, *hook.Ops[0])
@@ -101,26 +99,26 @@ var _ = Describe("VRG_KubeObjectProtection", func() {
 		})
 
 		It("Hook to RecoverSpec", func() {
-			targetRecoverSpec := &kubeobjects.RecoverSpec{
+			targetRecoverSpec := &ramen.RecoverSpec{
 				BackupName: ramen.ReservedBackupName,
-				Spec: kubeobjects.Spec{
-					KubeResourcesSpec: kubeobjects.KubeResourcesSpec{
+				OperationSpec: ramen.OperationSpec{
+					ResourcesSpec: ramen.ResourcesSpec{
 						IncludedNamespaces: []string{namespaceName},
 						IncludedResources:  []string{"pod"},
 						ExcludedResources:  []string{},
-						Hooks: []kubeobjects.HookSpec{
-							{
-								Name:          hook.Ops[0].Name,
-								Type:          hook.Type,
-								Command:       hook.Ops[0].Command,
-								Timeout:       hook.Ops[0].Timeout,
-								Container:     &hook.Ops[0].Container,
-								LabelSelector: hook.LabelSelector,
-							},
-						},
 					},
 					LabelSelector:           hook.LabelSelector,
 					IncludeClusterResources: new(bool),
+					Hooks: []ramen.HookSpec{
+						{
+							Name:          hook.Ops[0].Name,
+							Type:          hook.Type,
+							Command:       hook.Ops[0].Command,
+							Timeout:       hook.Ops[0].Timeout,
+							Container:     &hook.Ops[0].Container,
+							LabelSelector: hook.LabelSelector,
+						},
+					},
 				},
 			}
 			converted, err := convertRecipeHookToRecoverSpec(*hook, *hook.Ops[0])
@@ -130,10 +128,10 @@ var _ = Describe("VRG_KubeObjectProtection", func() {
 		})
 
 		It("Group to CaptureSpec", func() {
-			targetCaptureSpec := &kubeobjects.CaptureSpec{
+			targetCaptureSpec := &ramen.CaptureSpec{
 				Name: group.Name,
-				Spec: kubeobjects.Spec{
-					KubeResourcesSpec: kubeobjects.KubeResourcesSpec{
+				OperationSpec: ramen.OperationSpec{
+					ResourcesSpec: ramen.ResourcesSpec{
 						IncludedNamespaces: group.IncludedNamespaces,
 						IncludedResources:  group.IncludedResourceTypes,
 						ExcludedResources:  group.ExcludedResourceTypes,
@@ -150,10 +148,10 @@ var _ = Describe("VRG_KubeObjectProtection", func() {
 		})
 
 		It("Group to RecoverSpec", func() {
-			targetRecoverSpec := &kubeobjects.RecoverSpec{
+			targetRecoverSpec := &ramen.RecoverSpec{
 				BackupName: group.BackupRef,
-				Spec: kubeobjects.Spec{
-					KubeResourcesSpec: kubeobjects.KubeResourcesSpec{
+				OperationSpec: ramen.OperationSpec{
+					ResourcesSpec: ramen.ResourcesSpec{
 						IncludedNamespaces: group.IncludedNamespaces,
 						IncludedResources:  group.IncludedResourceTypes,
 						ExcludedResources:  group.ExcludedResourceTypes,
