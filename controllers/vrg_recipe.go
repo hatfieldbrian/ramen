@@ -17,12 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type RecipeElements struct {
-	PvcSelector     PvcSelector
-	CaptureWorkflow []ramen.CaptureSpec
-	RecoverWorkflow []ramen.RecoverSpec
-}
-
 func captureWorkflowDefault(vrg ramen.VolumeReplicationGroup) []ramen.CaptureSpec {
 	return []ramen.CaptureSpec{
 		{
@@ -39,35 +33,42 @@ func recoverWorkflowDefault() []ramen.RecoverSpec { return []ramen.RecoverSpec{{
 
 func GetPVCSelector(ctx context.Context, reader client.Reader, vrg ramen.VolumeReplicationGroup,
 	log logr.Logger,
-) (PvcSelector, error) {
-	recipeElements, err := recipeVolumesAndOptionallyWorkflowsGet(ctx, reader, vrg, log,
-		func(recipe.Recipe, *RecipeElements, ramen.VolumeReplicationGroup) error { return nil },
+) (ramen.PvcSelector, error) {
+	err := recipeVolumesAndOptionallyWorkflowsGet(ctx, reader, &vrg, log,
+		func(recipe.Recipe, *ramen.Recipe, ramen.VolumeReplicationGroup) error { return nil },
 	)
 
-	return recipeElements.PvcSelector, err
+	return vrg.Status.KubeObjectProtection.Recipe.PvcSelector, err
 }
 
-func RecipeElementsGet(ctx context.Context, reader client.Reader, vrg ramen.VolumeReplicationGroup,
+func recipeGet(ctx context.Context, reader client.Reader, vrg *ramen.VolumeReplicationGroup,
 	log logr.Logger,
-) (RecipeElements, error) {
+) error {
 	return recipeVolumesAndOptionallyWorkflowsGet(ctx, reader, vrg, log, recipeWorkflowsGet)
 }
 
-func recipeVolumesAndOptionallyWorkflowsGet(ctx context.Context, reader client.Reader, vrg ramen.VolumeReplicationGroup,
-	log logr.Logger, workflowsGet func(recipe.Recipe, *RecipeElements, ramen.VolumeReplicationGroup) error,
-) (RecipeElements, error) {
+func recipeVolumesAndOptionallyWorkflowsGet(ctx context.Context, reader client.Reader,
+	vrg *ramen.VolumeReplicationGroup,
+	log logr.Logger, workflowsGet func(recipe.Recipe, *ramen.Recipe, ramen.VolumeReplicationGroup) error,
+) error {
+	recipe1 := &vrg.Status.KubeObjectProtection.Recipe
+
 	if vrg.Spec.KubeObjectProtection == nil {
-		return RecipeElements{
-			PvcSelector: pvcSelectorDefault(vrg),
-		}, nil
+		*recipe1 = ramen.Recipe{
+			PvcSelector: pvcSelectorDefault(*vrg),
+		}
+
+		return nil
 	}
 
 	if vrg.Spec.KubeObjectProtection.RecipeRef == nil {
-		return RecipeElements{
-			PvcSelector:     pvcSelectorDefault(vrg),
-			CaptureWorkflow: captureWorkflowDefault(vrg),
+		*recipe1 = ramen.Recipe{
+			PvcSelector:     pvcSelectorDefault(*vrg),
+			CaptureWorkflow: captureWorkflowDefault(*vrg),
 			RecoverWorkflow: recoverWorkflowDefault(),
-		}, nil
+		}
+
+		return nil
 	}
 
 	recipe := recipe.Recipe{}
@@ -75,36 +76,36 @@ func recipeVolumesAndOptionallyWorkflowsGet(ctx context.Context, reader client.R
 		Namespace: vrg.Spec.KubeObjectProtection.RecipeRef.Namespace,
 		Name:      vrg.Spec.KubeObjectProtection.RecipeRef.Name,
 	}, &recipe); err != nil {
-		return RecipeElements{}, errors.Wrap(err, "recipe get")
+		return errors.Wrap(err, "recipe get")
 	}
 
 	if err := RecipeParametersExpand(&recipe, vrg.Spec.KubeObjectProtection.RecipeParameters, log); err != nil {
-		return RecipeElements{}, errors.Wrap(err, "recipe parameters expand")
+		return errors.Wrap(err, "recipe parameters expand")
 	}
 
-	recipeElements := RecipeElements{
-		PvcSelector: pvcSelectorRecipeRefNonNil(recipe, vrg),
+	*recipe1 = ramen.Recipe{
+		PvcSelector: pvcSelectorRecipeRefNonNil(recipe, *vrg),
 	}
 
-	return recipeElements, workflowsGet(recipe, &recipeElements, vrg)
+	return workflowsGet(recipe, recipe1, *vrg)
 }
 
-func recipeWorkflowsGet(recipe recipe.Recipe, recipeElements *RecipeElements, vrg ramen.VolumeReplicationGroup) error {
+func recipeWorkflowsGet(recipe recipe.Recipe, recipe1 *ramen.Recipe, vrg ramen.VolumeReplicationGroup) error {
 	var err error
 
 	if recipe.Spec.CaptureWorkflow == nil {
-		recipeElements.CaptureWorkflow = captureWorkflowDefault(vrg)
+		recipe1.CaptureWorkflow = captureWorkflowDefault(vrg)
 	} else {
-		recipeElements.CaptureWorkflow, err = getCaptureGroups(recipe)
+		recipe1.CaptureWorkflow, err = getCaptureGroups(recipe)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get groups from capture workflow")
 		}
 	}
 
 	if recipe.Spec.RecoverWorkflow == nil {
-		recipeElements.RecoverWorkflow = recoverWorkflowDefault()
+		recipe1.RecoverWorkflow = recoverWorkflowDefault()
 	} else {
-		recipeElements.RecoverWorkflow, err = getRecoverGroups(recipe)
+		recipe1.RecoverWorkflow, err = getRecoverGroups(recipe)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get groups from recovery workflow")
 		}

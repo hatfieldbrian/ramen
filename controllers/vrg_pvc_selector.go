@@ -6,28 +6,25 @@ package controllers
 import (
 	ramen "github.com/ramendr/ramen/api/v1alpha1"
 	recipe "github.com/ramendr/recipe/api/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-type PvcSelector struct {
-	LabelSelector  metav1.LabelSelector
-	NamespaceNames []string
-}
 
 func pvcNamespaceNamesDefault(vrg ramen.VolumeReplicationGroup) []string {
 	return []string{vrg.Namespace}
 }
 
-func pvcSelectorDefault(vrg ramen.VolumeReplicationGroup) PvcSelector {
-	return PvcSelector{vrg.Spec.PVCSelector, pvcNamespaceNamesDefault(vrg)}
+func pvcSelectorDefault(vrg ramen.VolumeReplicationGroup) ramen.PvcSelector {
+	return ramen.PvcSelector{
+		LabelSelector:  vrg.Spec.PVCSelector,
+		NamespaceNames: pvcNamespaceNamesDefault(vrg),
+	}
 }
 
-func pvcSelectorRecipeRefNonNil(recipe recipe.Recipe, vrg ramen.VolumeReplicationGroup) PvcSelector {
+func pvcSelectorRecipeRefNonNil(recipe recipe.Recipe, vrg ramen.VolumeReplicationGroup) ramen.PvcSelector {
 	if recipe.Spec.Volumes == nil {
 		return pvcSelectorDefault(vrg)
 	}
 
-	var selector PvcSelector
+	var selector ramen.PvcSelector
 
 	if recipe.Spec.Volumes.LabelSelector != nil {
 		selector.LabelSelector = *recipe.Spec.Volumes.LabelSelector

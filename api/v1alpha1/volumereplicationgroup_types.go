@@ -288,6 +288,8 @@ type KubeObjectsCaptureIdentifier struct {
 type KubeObjectProtectionStatus struct {
 	//+optional
 	CaptureToRecoverFrom *KubeObjectsCaptureIdentifier `json:"captureToRecoverFrom,omitempty"`
+	//+optional
+	Recipe Recipe `json:"recipe,omitempty"`
 }
 
 // VolumeReplicationGroupStatus defines the observed state of VolumeReplicationGroup

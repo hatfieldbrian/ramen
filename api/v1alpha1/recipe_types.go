@@ -8,6 +8,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type Recipe struct {
+	PvcSelector     PvcSelector   `json:"pvcSelector,omitempty"`
+	CaptureWorkflow []CaptureSpec `json:"captureWorkflow,omitempty"`
+	RecoverWorkflow []RecoverSpec `json:"recoverWorkflow,omitempty"`
+}
+
+type PvcSelector struct {
+	LabelSelector  metav1.LabelSelector `json:"labelSelector,omitempty"`
+	NamespaceNames []string             `json:"namespaceNames,omitempty"`
+}
+
 type CaptureSpec struct {
 	//+optional
 	Name          string `json:"name,omitempty"`

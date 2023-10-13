@@ -402,7 +402,6 @@ type VRGInstance struct {
 	instance             *ramendrv1alpha1.VolumeReplicationGroup
 	savedInstanceStatus  ramendrv1alpha1.VolumeReplicationGroupStatus
 	ramenConfig          *ramendrv1alpha1.RamenConfig
-	recipeElements       RecipeElements
 	volRepPVCs           []corev1.PersistentVolumeClaim
 	volSyncPVCs          []corev1.PersistentVolumeClaim
 	replClassList        *volrep.VolumeReplicationClassList
@@ -444,6 +443,8 @@ const (
 )
 
 func (v *VRGInstance) processVRG() ctrl.Result {
+	vrg := v.instance
+
 	if err := v.validateVRGState(); err != nil {
 		// No requeue, as there is no reconcile till user changes desired spec to a valid value
 		return v.invalid(err, "VolumeReplicationGroup state is invalid", false)
@@ -456,16 +457,11 @@ func (v *VRGInstance) processVRG() ctrl.Result {
 		return v.invalid(err, "VolumeReplicationGroup mode is invalid", false)
 	}
 
-	{
-		var err error
-
-		v.recipeElements, err = RecipeElementsGet(v.ctx, v.reconciler.Client, *v.instance, v.log)
-		if err != nil {
-			return v.invalid(err, "Failed to get recipe", true) // TODO watch recipes
-		}
-
-		v.log.Info("Recipe", "elements", v.recipeElements)
+	if err := recipeGet(v.ctx, v.reconciler.Client, vrg, v.log); err != nil {
+		return v.invalid(err, "Failed to get recipe", true) // TODO watch recipes
 	}
+
+	v.log.Info("Recipe", "elements", vrg.Status.KubeObjectProtection.Recipe)
 
 	if err := v.updatePVCList(); err != nil {
 		return v.invalid(err, "Failed to process list of PVCs to protect", true)
@@ -580,10 +576,12 @@ func (v *VRGInstance) clusterDataRestore(result *ctrl.Result) error {
 
 // updatePVCList fetches and updates the PVC list to process for the current instance of VRG
 func (v *VRGInstance) updatePVCList() error {
+	vrg := v.instance
+
 	pvcList, err := rmnutil.ListPVCsByPVCSelector(v.ctx, v.reconciler.Client, v.log,
-		v.recipeElements.PvcSelector.LabelSelector,
-		v.recipeElements.PvcSelector.NamespaceNames,
-		v.instance.Spec.VolSync.Disabled,
+		vrg.Status.KubeObjectProtection.Recipe.PvcSelector.LabelSelector,
+		vrg.Status.KubeObjectProtection.Recipe.PvcSelector.NamespaceNames,
+		vrg.Spec.VolSync.Disabled,
 	)
 	if err != nil {
 		return err

@@ -163,7 +163,7 @@ var _ = Describe("VolumeReplicationGroupRecipe", func() {
 	vrgPvcsConsistOfEventually := func(pvcs ...*corev1.PersistentVolumeClaim) {
 		Eventually(vrgPvcsGet).Should(ConsistOf(vrgPvcNamesMatchPvcs(pvcs...)))
 	}
-	vrgPvcSelectorGet := func() controllers.PvcSelector {
+	vrgPvcSelectorGet := func() ramen.PvcSelector {
 		pvcSelector, err := controllers.GetPVCSelector(ctx, apiReader, *vrg, testLogger)
 		Expect(err).ToNot(HaveOccurred())
 
