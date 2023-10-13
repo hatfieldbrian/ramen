@@ -12,6 +12,7 @@ import (
 	"github.com/ramendr/ramen/controllers/volsync"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 func (v *VRGInstance) restorePVsForVolSync() error {
@@ -199,11 +200,17 @@ func (v *VRGInstance) reconcileRDSpecForDeletionOrReplication() bool {
 	requeue := false
 
 	for _, rdSpec := range v.instance.Spec.VolSync.RDSpec {
+		pvcNamespacedName := types.NamespacedName{
+			Namespace: rdSpec.ProtectedPVC.Namespace,
+			Name:      rdSpec.ProtectedPVC.Name,
+		}
+		log := v.log.WithValues("pvc", pvcNamespacedName.String())
+
 		v.log.Info("Reconcile RD as Secondary", "RDSpec", rdSpec)
 
 		rd, err := v.volSyncHandler.ReconcileRD(rdSpec)
 		if err != nil {
-			v.log.Error(err, "Failed to reconcile VolSync Replication Destination")
+			log.Error(err, "Failed to reconcile VolSync Replication Destination")
 
 			requeue = true
 
@@ -211,8 +218,7 @@ func (v *VRGInstance) reconcileRDSpecForDeletionOrReplication() bool {
 		}
 
 		if rd == nil {
-			v.log.Info(fmt.Sprintf("ReconcileRD - ReplicationDestination for %s is not ready. We'll retry...",
-				rdSpec.ProtectedPVC.Name))
+			log.Info("ReconcileRD - ReplicationDestination is not ready. We'll retry...")
 
 			requeue = true
 		}
@@ -289,13 +295,19 @@ func (v *VRGInstance) buildDataProtectedCondition() *metav1.Condition {
 	if v.instance.Spec.ReplicationState == ramendrv1alpha1.Primary {
 		for _, protectedPVC := range v.instance.Status.ProtectedPVCs {
 			if protectedPVC.ProtectedByVolSync {
+				pvcNamespacedName := types.NamespacedName{
+					Namespace: protectedPVC.Namespace,
+					Name:      protectedPVC.Name,
+				}
+				log := v.log.WithValues("pvc", pvcNamespacedName.String())
+
 				protectedByVolSyncCount++
 
 				condition := findCondition(protectedPVC.Conditions, VRGConditionTypeVolSyncRepSourceSetup)
 				if condition == nil || condition.Status != metav1.ConditionTrue {
 					ready = false
 
-					v.log.Info(fmt.Sprintf("VolSync RS hasn't been setup yet for PVC %s", protectedPVC.Name))
+					log.Info("VolSync RS hasn't been setup yet for PVC")
 
 					break
 				}
@@ -305,18 +317,17 @@ func (v *VRGInstance) buildDataProtectedCondition() *metav1.Condition {
 				if condition != nil && condition.Status != metav1.ConditionTrue {
 					ready = false
 
-					v.log.Info(fmt.Sprintf("VolSync RS is in progress for PVC %s", protectedPVC.Name))
+					log.Info("VolSync RS is in progress for PVC %s")
 
 					break
 				}
 
 				// Check now if we have synced up at least once for this PVC
-				rsDataProtected, err := v.volSyncHandler.IsRSDataProtected(protectedPVC.Namespace, protectedPVC.Name)
+				rsDataProtected, err := v.volSyncHandler.IsRSDataProtected(pvcNamespacedName)
 				if err != nil || !rsDataProtected {
 					ready = false
 
-					v.log.Info(fmt.Sprintf("First sync has not yet completed for VolSync RS %s -- Err %v",
-						protectedPVC.Name, err))
+					log.Info("First sync has not yet completed for VolSync RS", "error", err)
 
 					break
 				}
@@ -358,12 +369,18 @@ func (v VRGInstance) isVolSyncProtectedPVCConditionReady(conType string) bool {
 	ready := len(v.instance.Status.ProtectedPVCs) != 0
 
 	for _, protectedPVC := range v.instance.Status.ProtectedPVCs {
+		pvcNamespacedName := types.NamespacedName{
+			Namespace: protectedPVC.Namespace,
+			Name:      protectedPVC.Name,
+		}
+		log := v.log.WithValues("pvc", pvcNamespacedName.String())
+
 		if protectedPVC.ProtectedByVolSync {
 			condition := findCondition(protectedPVC.Conditions, conType)
 			if condition == nil || condition.Status != metav1.ConditionTrue {
 				ready = false
 
-				v.log.Info(fmt.Sprintf("VolSync %s is not complete yet for PVC %s", conType, protectedPVC.Name))
+				log.Info(fmt.Sprintf("VolSync %s is not complete yet", conType))
 
 				break
 			}

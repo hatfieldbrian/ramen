@@ -1604,10 +1604,9 @@ var _ = Describe("VolSync_Handler", func() {
 		})
 
 		It("Should delete an RD when it belongs to the VRG", func() {
-			rdToDelete1 := rdSpecList[3].ProtectedPVC.Name // rd name should == pvc name
+			rdToDelete1 := protectedPvcNamespacedName(rdSpecList[3].ProtectedPVC) // rd name should == pvc name
 			Expect(vsHandler.DeleteRD(rdToDelete1)).To(Succeed())
-
-			rdToDelete2 := rdSpecList[5].ProtectedPVC.Name // rd name should == pvc name
+			rdToDelete2 := protectedPvcNamespacedName(rdSpecList[5].ProtectedPVC) // rd name should == pvc name
 			Expect(vsHandler.DeleteRD(rdToDelete2)).To(Succeed())
 
 			remainingRDs := &volsyncv1alpha1.ReplicationDestinationList{}
@@ -1618,14 +1617,14 @@ var _ = Describe("VolSync_Handler", func() {
 			}, maxWait, interval).Should(Equal(len(rdSpecList) + len(rdSpecListOtherOwner) - 2))
 
 			for _, rd := range remainingRDs.Items {
-				Expect(rd.GetName).NotTo(Equal(rdToDelete1))
-				Expect(rd.GetName).NotTo(Equal(rdToDelete2))
+				Expect(rd.GetName).NotTo(Equal(rdToDelete1.Name))
+				Expect(rd.GetName).NotTo(Equal(rdToDelete2.Name))
 			}
 		})
 
 		It("Should not delete an RD when it does not belong to the VRG", func() {
-			rdToDelete := rdSpecListOtherOwner[1].ProtectedPVC.Name // rd name should == pvc name
-			Expect(vsHandler.DeleteRD(rdToDelete)).To(Succeed())    // Should not return err
+			rdToDelete := protectedPvcNamespacedName(rdSpecListOtherOwner[1].ProtectedPVC) // rd name should == pvc name
+			Expect(vsHandler.DeleteRD(rdToDelete)).To(Succeed())
 
 			// No RDs should have been deleted
 			remainingRDs := &volsyncv1alpha1.ReplicationDestinationList{}
@@ -1756,10 +1755,10 @@ var _ = Describe("VolSync_Handler", func() {
 		})
 
 		It("Should delete an RS when it belongs to the VRG", func() {
-			rsToDelete1 := rsSpecList[3].ProtectedPVC.Name // rs name should == pvc name
+			rsToDelete1 := protectedPvcNamespacedName(rsSpecList[3].ProtectedPVC) // rs name should == pvc name
 			Expect(vsHandler.DeleteRS(rsToDelete1)).To(Succeed())
 
-			rsToDelete2 := rsSpecList[5].ProtectedPVC.Name // rs name should == pvc name
+			rsToDelete2 := protectedPvcNamespacedName(rsSpecList[5].ProtectedPVC) // rs name should == pvc name
 			Expect(vsHandler.DeleteRS(rsToDelete2)).To(Succeed())
 
 			remainingRSs := &volsyncv1alpha1.ReplicationSourceList{}
@@ -1771,8 +1770,8 @@ var _ = Describe("VolSync_Handler", func() {
 		})
 
 		It("Should not delete an RS when it does not belong to the VRG", func() {
-			rsToDelete := rsSpecListOtherOwner[1].ProtectedPVC.Name // rs name should == pvc name
-			Expect(vsHandler.DeleteRS(rsToDelete)).To(Succeed())    // Should not return err
+			rsToDelete := protectedPvcNamespacedName(rsSpecListOtherOwner[1].ProtectedPVC) // rs name should == pvc name
+			Expect(vsHandler.DeleteRS(rsToDelete)).To(Succeed())
 
 			// No RSs should have been deleted
 			remainingRSs := &volsyncv1alpha1.ReplicationSourceList{}
@@ -1860,6 +1859,13 @@ var _ = Describe("VolSync_Handler", func() {
 		})
 	})
 })
+
+func protectedPvcNamespacedName(protectedPVC ramendrv1alpha1.ProtectedPVC) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: protectedPVC.Namespace,
+		Name:      protectedPVC.Name,
+	}
+}
 
 func ownerMatches(obj metav1.Object, ownerName, ownerKind string, ownerIsController bool) bool {
 	for _, ownerRef := range obj.GetOwnerReferences() {
