@@ -374,6 +374,7 @@ var _ = Describe("VolumeReplicationGroupVolRepController", func() {
 			vrgVRDeleteEnsureTestCase.unprotectDeletionOfVolReps()
 
 			By("Ensuring VRG is deleted eventually as a result")
+			t0 := time.Now()
 			var i int
 			Eventually(func() error {
 				i++
@@ -384,7 +385,11 @@ var _ = Describe("VolumeReplicationGroupVolRepController", func() {
 					Group:    ramendrv1alpha1.GroupVersion.Group,
 					Resource: "volumereplicationgroups",
 				}, vrgVRDeleteEnsureTestCase.vrgName)),
-					"polled %d times for VRG to be garbage collected\n"+format.Object(*vrg, 1), i)
+					"polled %d times in %f seconds for VRG to be garbage collected\n"+
+						format.Object(*vrg, 1),
+					i,
+					time.Since(t0).Minutes(),
+				)
 
 			vrgVRDeleteEnsureTestCase.cleanupNamespace()
 			vrgVRDeleteEnsureTestCase.cleanupSC()
